@@ -23,3 +23,7 @@ libs
 classes
 jars
 
+# compiled class files
+*.class
+standalone_bin/
+
