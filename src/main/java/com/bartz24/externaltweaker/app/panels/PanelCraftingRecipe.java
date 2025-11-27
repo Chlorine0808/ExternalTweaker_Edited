@@ -38,6 +38,17 @@ public class PanelCraftingRecipe extends JPanel {
     private String[][] gridData = new String[3][3];
     private String outputData = "null";
 
+    private javax.swing.JCheckBox chkUseOreDict;
+    private JPanel selectedItemPanel;
+    private JLabel lblSelectedItem;
+    private JButton btnPrevItem;
+    private JButton btnNextItem;
+    private int selectedX = -1;
+    private int selectedY = -1;
+
+    // Static field to track the source button of a drag operation
+    private static JButton draggedButton = null;
+
     public PanelCraftingRecipe(AppFrame frame, RecipeHandler recipeHandler, ETActualRecipe recipe) {
         this.mainFrame = frame;
         this.handler = recipeHandler;
@@ -143,11 +154,40 @@ public class PanelCraftingRecipe extends JPanel {
                 btn.setHorizontalTextPosition(SwingConstants.CENTER);
 
                 // Enable dragging from button
+                btn.addMouseMotionListener(new MouseAdapter() {
+                    public void mouseDragged(MouseEvent e) {
+                        JComponent c = (JComponent) e.getSource();
+                        // Update selection
+                        for (int y = 0; y < 3; y++) {
+                            for (int x = 0; x < 3; x++) {
+                                if (gridButtons[y][x] == c) {
+                                    selectedX = x;
+                                    selectedY = y;
+                                    updateSelectionDisplay();
+                                    break;
+                                }
+                            }
+                        }
+
+                        TransferHandler handler = c.getTransferHandler();
+                        draggedButton = (JButton) c; // Track source
+                        handler.exportAsDrag(c, e, TransferHandler.MOVE);
+                    }
+                });
                 btn.addMouseListener(new MouseAdapter() {
                     public void mousePressed(MouseEvent e) {
                         JComponent c = (JComponent) e.getSource();
-                        TransferHandler handler = c.getTransferHandler();
-                        handler.exportAsDrag(c, e, TransferHandler.MOVE);
+                        // Update selection on click too
+                        for (int y = 0; y < 3; y++) {
+                            for (int x = 0; x < 3; x++) {
+                                if (gridButtons[y][x] == c) {
+                                    selectedX = x;
+                                    selectedY = y;
+                                    updateSelectionDisplay();
+                                    break;
+                                }
+                            }
+                        }
                     }
                 });
 
@@ -162,10 +202,11 @@ public class PanelCraftingRecipe extends JPanel {
         outputButton.setTransferHandler(dropHandler);
         outputButton.setVerticalTextPosition(SwingConstants.BOTTOM);
         outputButton.setHorizontalTextPosition(SwingConstants.CENTER);
-        outputButton.addMouseListener(new MouseAdapter() {
-            public void mousePressed(MouseEvent e) {
+        outputButton.addMouseMotionListener(new MouseAdapter() {
+            public void mouseDragged(MouseEvent e) {
                 JComponent c = (JComponent) e.getSource();
                 TransferHandler handler = c.getTransferHandler();
+                draggedButton = (JButton) c; // Track source
                 handler.exportAsDrag(c, e, TransferHandler.MOVE);
             }
         });
@@ -173,6 +214,34 @@ public class PanelCraftingRecipe extends JPanel {
         JLabel arrowLabel = new JLabel("->");
         arrowLabel.setHorizontalAlignment(SwingConstants.CENTER);
         arrowLabel.setFont(arrowLabel.getFont().deriveFont(32.0f));
+
+        chkUseOreDict = new javax.swing.JCheckBox("Use OreDict");
+        chkUseOreDict.setSelected(true);
+        chkUseOreDict.setHorizontalAlignment(SwingConstants.CENTER);
+
+        // Selected Item Panel
+        selectedItemPanel = new JPanel(new BorderLayout());
+        selectedItemPanel.setBorder(BorderFactory.createTitledBorder("Selected Item"));
+        lblSelectedItem = new JLabel("None");
+        lblSelectedItem.setHorizontalAlignment(SwingConstants.CENTER);
+        selectedItemPanel.add(lblSelectedItem, BorderLayout.CENTER);
+
+        btnPrevItem = new JButton("<");
+        btnNextItem = new JButton(">");
+        JPanel btnPanel = new JPanel(new GridLayout(1, 2));
+        btnPanel.add(btnPrevItem);
+        btnPanel.add(btnNextItem);
+        selectedItemPanel.add(btnPanel, BorderLayout.SOUTH);
+
+        java.awt.event.ActionListener arrowListener = new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (selectedX != -1 && selectedY != -1) {
+                    cycleItem(selectedX, selectedY, e.getSource() == btnNextItem);
+                }
+            }
+        };
+        btnPrevItem.addActionListener(arrowListener);
+        btnNextItem.addActionListener(arrowListener);
 
         // Trash Panel
         trashPanel = new JPanel(new BorderLayout());
@@ -223,12 +292,49 @@ public class PanelCraftingRecipe extends JPanel {
                     String data = (String) t.getTransferData(DataFlavor.stringFlavor);
 
                     if (btn == outputButton) {
+                        if (data.startsWith("ore:")) {
+                            String rep = mainFrame.getOreDictRepresentativeItem(data);
+                            if (rep != null) {
+                                data = rep;
+                            }
+                        }
                         setOutputItem(data);
                     } else {
                         // Find which grid button this is
                         for (int y = 0; y < 3; y++) {
                             for (int x = 0; x < 3; x++) {
                                 if (gridButtons[y][x] == btn) {
+                                    // Check for swap
+                                    if (draggedButton != null && draggedButton != btn) {
+                                        JButton sourceBtn = draggedButton;
+                                        // Find source coordinates
+                                        int sourceX = -1;
+                                        int sourceY = -1;
+                                        for (int sy = 0; sy < 3; sy++) {
+                                            for (int sx = 0; sx < 3; sx++) {
+                                                if (gridButtons[sy][sx] == sourceBtn) {
+                                                    sourceX = sx;
+                                                    sourceY = sy;
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+                                        if (sourceX != -1) {
+                                            // Perform swap
+                                            String currentTargetItem = gridData[y][x];
+                                            setGridItem(sourceX, sourceY, currentTargetItem);
+                                            // Reset draggedButton to indicate swap was handled
+                                            draggedButton = null;
+                                        }
+                                    }
+
+                                    if (chkUseOreDict.isSelected()) {
+                                        java.util.List<String> ores = mainFrame.getOreDicts(data);
+                                        if (!ores.isEmpty()) {
+                                            data = "ore:" + ores.get(0);
+                                        }
+                                    }
                                     setGridItem(x, y, data);
                                     saveToRecipe();
                                     return true;
@@ -273,25 +379,29 @@ public class PanelCraftingRecipe extends JPanel {
             @Override
             protected void exportDone(JComponent source, Transferable data, int action) {
                 if (action == MOVE) {
-                    JButton btn = (JButton) source;
-                    if (btn == outputButton) {
-                        setOutputItem("null");
+                    if (draggedButton == null) {
+                         // Swapped, do nothing
                     } else {
-                        for (int y = 0; y < 3; y++) {
-                            for (int x = 0; x < 3; x++) {
-                                if (gridButtons[y][x] == btn) {
-                                    setGridItem(x, y, "null");
-                                    break;
+                        JButton btn = (JButton) source;
+                        if (btn == outputButton) {
+                            setOutputItem("null");
+                        } else {
+                            for (int y = 0; y < 3; y++) {
+                                for (int x = 0; x < 3; x++) {
+                                    if (gridButtons[y][x] == btn) {
+                                        setGridItem(x, y, "null");
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
                     saveToRecipe();
+                    draggedButton = null; // Cleanup
                 }
             }
         };
 
-        // Re-apply handler
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
                 gridButtons[y][x].setTransferHandler(gridTransferHandler);
@@ -305,10 +415,14 @@ public class PanelCraftingRecipe extends JPanel {
         layout.setHorizontalGroup(
                 layout.createSequentialGroup()
                         .addContainerGap()
-                        .addComponent(gridPanel, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE,
-                                GroupLayout.PREFERRED_SIZE)
+                        .addGroup(layout.createParallelGroup(Alignment.CENTER)
+                                .addComponent(gridPanel, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE,
+                                        GroupLayout.PREFERRED_SIZE)
+                                .addComponent(selectedItemPanel, GroupLayout.PREFERRED_SIZE, 150,
+                                        GroupLayout.PREFERRED_SIZE))
                         .addPreferredGap(ComponentPlacement.RELATED)
                         .addGroup(layout.createParallelGroup(Alignment.CENTER)
+                                .addComponent(chkUseOreDict)
                                 .addGroup(layout.createSequentialGroup()
                                         .addComponent(arrowLabel, GroupLayout.PREFERRED_SIZE, 40,
                                                 GroupLayout.PREFERRED_SIZE)
@@ -324,9 +438,15 @@ public class PanelCraftingRecipe extends JPanel {
                         .addGroup(layout.createSequentialGroup()
                                 .addContainerGap()
                                 .addGroup(layout.createParallelGroup(Alignment.CENTER)
-                                        .addComponent(gridPanel, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE,
-                                                GroupLayout.PREFERRED_SIZE)
                                         .addGroup(layout.createSequentialGroup()
+                                                .addComponent(gridPanel, GroupLayout.PREFERRED_SIZE,
+                                                        GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+                                                .addGap(10)
+                                                .addComponent(selectedItemPanel, GroupLayout.PREFERRED_SIZE, 150,
+                                                        GroupLayout.PREFERRED_SIZE))
+                                        .addGroup(layout.createSequentialGroup()
+                                                .addComponent(chkUseOreDict)
+                                                .addGap(10)
                                                 .addGroup(layout.createParallelGroup(Alignment.CENTER)
                                                         .addComponent(arrowLabel)
                                                         .addComponent(outputButton, GroupLayout.PREFERRED_SIZE, 120,
@@ -335,6 +455,66 @@ public class PanelCraftingRecipe extends JPanel {
                                                 .addComponent(trashPanel, GroupLayout.PREFERRED_SIZE,
                                                         GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)))
                                 .addContainerGap()));
+    }
+
+    private void cycleItem(int x, int y, boolean next) {
+        String current = gridData[y][x];
+        if (current == null || current.equals("null") || current.isEmpty())
+            return;
+
+        String itemId = current;
+        if (current.startsWith("ore:")) {
+            // If currently ore, get representative item to find base ID?
+            // Or we need to know the base ID to cycle back to it.
+            // This is tricky if we don't store the base ID.
+            // But we can try to find the ore dict list and see if we can cycle.
+            // If we have "ore:logWood", we don't know which log it was originally.
+            // But maybe we can just cycle through available ore dicts for the *current* ore
+            // dict?
+            // No, we want to cycle Item -> Ore1 -> Ore2 -> Item.
+            // If we only have "ore:logWood", we can't go back to "minecraft:log" unless we
+            // stored it.
+            // However, for now, let's assume we can only cycle if we have the item ID or if
+            // we can find the item ID from the ore dict (representative).
+            // Let's use the representative item as the "base" if we are in ore mode.
+            String rep = mainFrame.getOreDictRepresentativeItem(current);
+            if (rep != null)
+                itemId = rep;
+        }
+
+        // This logic is slightly flawed if we lose the original item ID.
+        // But for this implementation, let's try to look up ore dicts for the current
+        // item (if it's an item)
+        // or the representative item (if it's an ore dict).
+
+        java.util.List<String> ores = mainFrame.getOreDicts(itemId);
+        if (ores.isEmpty()) {
+            System.out.println("No OreDict entries found for cycling: " + itemId);
+            return;
+        }
+
+        java.util.List<String> options = new java.util.ArrayList<>();
+        options.add(itemId);
+        for (String ore : ores) {
+            options.add("ore:" + ore);
+        }
+
+        int index = options.indexOf(current);
+        if (index == -1)
+            index = 0; // Should be found if logic is correct, else default to item
+
+        if (next) {
+            index++;
+            if (index >= options.size())
+                index = 0;
+        } else {
+            index--;
+            if (index < 0)
+                index = options.size() - 1;
+        }
+
+        setGridItem(x, y, options.get(index));
+        saveToRecipe();
     }
 
     private class ButtonTransferable implements Transferable {
@@ -410,8 +590,27 @@ public class PanelCraftingRecipe extends JPanel {
         btn.setToolTipText(item);
 
         if (mainFrame.iconLoader != null) {
-            ImageIcon icon = mainFrame.iconLoader.loadIcon(item, name, iconSize);
+            String iconItem = item;
+            if (item.startsWith("ore:")) {
+                String rep = mainFrame.getOreDictRepresentativeItem(item);
+                if (rep != null)
+                    iconItem = rep;
+            }
+            ImageIcon icon = mainFrame.iconLoader.loadIcon(iconItem, name, iconSize);
             btn.setIcon(icon);
+        }
+    }
+
+    private void updateSelectionDisplay() {
+        if (selectedX != -1 && selectedY != -1) {
+            String item = gridData[selectedY][selectedX];
+            lblSelectedItem.setText(item == null || item.equals("null") ? "None" : item);
+            btnPrevItem.setEnabled(item != null && !item.equals("null"));
+            btnNextItem.setEnabled(item != null && !item.equals("null"));
+        } else {
+            lblSelectedItem.setText("None");
+            btnPrevItem.setEnabled(false);
+            btnNextItem.setEnabled(false);
         }
     }
 

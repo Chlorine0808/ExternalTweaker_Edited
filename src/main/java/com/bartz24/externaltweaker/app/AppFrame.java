@@ -82,6 +82,8 @@ public class AppFrame extends JFrame {
 	Object[][] itemMappings;
 	Object[][] fluidMappings;
 	Object[][] oreDictMappings;
+	public java.util.Map<String, List<String>> itemToOreDict = new HashMap<>();
+	public java.util.Map<String, List<String>> oreDictToItems = new HashMap<>();
 	public JTable table;
 	public List<String> blacklist = new ArrayList<>();
 	public JScrollPane tableScroll;
@@ -127,7 +129,7 @@ public class AppFrame extends JFrame {
 	public File iconDir;
 
 	public AppFrame(Object[][] itemMappings, Object[][] fluidMappings, Object[][] oreDictMappings,
-			List<String> methods, File iconDir) {
+			List<String> methods, File iconDir, File oredictCsv) {
 		this.iconDir = iconDir;
 		this.iconLoader = new IconLoader(iconDir);
 		setTitle("External Tweaker");
@@ -138,6 +140,7 @@ public class AppFrame extends JFrame {
 		this.setPreferredSize(new Dimension(1200, 800));
 
 		loadBlacklist();
+		loadOreDictCsv(oredictCsv);
 
 		recipeHandlers.add(new ShapedCraftingHandler());
 
@@ -217,6 +220,18 @@ public class AppFrame extends JFrame {
 				// Get the ID (column 0)
 				String text = (String) table.getValueAt(row, 0);
 				return new java.awt.datatransfer.StringSelection(text);
+			}
+
+			@Override
+			public boolean canImport(TransferSupport support) {
+				return support.isDataFlavorSupported(java.awt.datatransfer.DataFlavor.stringFlavor);
+			}
+
+			@Override
+			public boolean importData(TransferSupport support) {
+				// We don't actually import data into the table, but we return true
+				// so that the source (if it's a MOVE action) knows to clear itself.
+				return true;
 			}
 		});
 
@@ -340,8 +355,10 @@ public class AppFrame extends JFrame {
 		buttonGroup_1.add(btnRecipeRemove);
 
 		btnRecipeAdd = new JRadioButton("Add/Other");
-		btnRecipeRemove.addActionListener(recipeTypeSelect);
+		btnRecipeAdd.addActionListener(recipeTypeSelect);
 		buttonGroup_1.add(btnRecipeAdd);
+
+		// ... (rest of constructor)
 
 		JPanel panel = new JPanel();
 
@@ -1005,7 +1022,7 @@ public class AppFrame extends JFrame {
 		java.awt.EventQueue.invokeLater(new Runnable() {
 			public void run() {
 				AppFrame frame = new AppFrame(new Object[0][0], new Object[0][0], new Object[0][0], new ArrayList(),
-						null);
+						null, null);
 				frame.setVisible(true);
 				frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 			}
@@ -1841,5 +1858,106 @@ public class AppFrame extends JFrame {
 			script.fileName = fileName;
 			updateScriptsList(false);
 		}
+	}
+
+	public void loadOreDictCsv(File file) {
+		if (file == null || !file.exists()) {
+			System.out.println("OreDict CSV not found or null: " + file);
+			return;
+		}
+
+		System.out.println("Loading OreDict CSV: " + file.getAbsolutePath());
+		int count = 0;
+		try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+			String line;
+			boolean first = true;
+			while ((line = br.readLine()) != null) {
+				if (first) {
+					first = false;
+					continue;
+				}
+				// Ore Name,ItemStack,Item ID,Display Name,Wildcard
+				String[] parts = line.split(",");
+				if (parts.length >= 3) {
+					String oreName = parts[0].trim();
+					String itemId = parts[2].trim();
+
+					if (!itemToOreDict.containsKey(itemId)) {
+						itemToOreDict.put(itemId, new ArrayList<>());
+					}
+					if (!itemToOreDict.get(itemId).contains(oreName)) {
+						itemToOreDict.get(itemId).add(oreName);
+					}
+
+					if (!oreDictToItems.containsKey(oreName)) {
+						oreDictToItems.put(oreName, new ArrayList<>());
+					}
+					if (!oreDictToItems.get(oreName).contains(itemId)) {
+						oreDictToItems.get(oreName).add(itemId);
+					}
+					count++;
+				}
+			}
+			System.out.println("Loaded " + count + " OreDict entries.");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	public List<String> getOreDicts(String itemId) {
+		if (itemId == null)
+			return Collections.emptyList();
+
+		System.out.println("Looking up OreDict for: " + itemId);
+
+		if (itemToOreDict.containsKey(itemId)) {
+			System.out.println("Found exact match: " + itemToOreDict.get(itemId));
+			return itemToOreDict.get(itemId);
+		}
+
+		if (itemId.contains(":")) {
+			String[] parts = itemId.split(":");
+			if (parts.length > 2) {
+				String noMeta = parts[0] + ":" + parts[1];
+				System.out.println("Trying without meta: " + noMeta);
+				if (itemToOreDict.containsKey(noMeta)) {
+					System.out.println("Found match without meta: " + itemToOreDict.get(noMeta));
+					return itemToOreDict.get(noMeta);
+				}
+			} else {
+				// Try adding :0
+				String withMeta = itemId + ":0";
+				System.out.println("Trying with :0: " + withMeta);
+				if (itemToOreDict.containsKey(withMeta)) {
+					System.out.println("Found match with :0: " + itemToOreDict.get(withMeta));
+					return itemToOreDict.get(withMeta);
+				}
+
+				// Try adding :*
+				String withWildcard = itemId + ":*";
+				System.out.println("Trying with :*: " + withWildcard);
+				if (itemToOreDict.containsKey(withWildcard)) {
+					System.out.println("Found match with :*: " + itemToOreDict.get(withWildcard));
+					return itemToOreDict.get(withWildcard);
+				}
+			}
+		}
+		System.out.println("No OreDict found for: " + itemId);
+		return Collections.emptyList();
+	}
+
+	public String getOreDictRepresentativeItem(String oreName) {
+		if (oreName == null)
+			return null;
+		if (oreName.startsWith("ore:"))
+			oreName = oreName.substring(4);
+
+		if (oreDictToItems.containsKey(oreName)) {
+			List<String> items = oreDictToItems.get(oreName);
+			if (!items.isEmpty()) {
+				return items.get(0);
+			}
+		}
+		return null;
 	}
 }

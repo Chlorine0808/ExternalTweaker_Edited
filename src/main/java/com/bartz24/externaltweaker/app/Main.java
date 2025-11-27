@@ -20,6 +20,7 @@ public class Main {
 	private static final String CONFIG_FILE = "config.properties";
 	private static final String KEY_ETD_PATH = "etdPath";
 	private static final String KEY_ICON_PATH = "iconPath";
+	private static final String KEY_OREDICT_CSV_PATH = "oredictCsvPath";
 
 	public static void main(String[] args) {
 		try {
@@ -31,12 +32,14 @@ public class Main {
 		Properties props = new Properties();
 		File etdFile = null;
 		File iconDir = null;
+		File oredictCsvFile = null;
 
 		// Load config
 		try (FileInputStream in = new FileInputStream(CONFIG_FILE)) {
 			props.load(in);
 			String etdPath = props.getProperty(KEY_ETD_PATH);
 			String iconPath = props.getProperty(KEY_ICON_PATH);
+			String oredictCsvPath = props.getProperty(KEY_OREDICT_CSV_PATH);
 
 			if (etdPath != null) {
 				File f = new File(etdPath);
@@ -48,6 +51,12 @@ public class Main {
 				File f = new File(iconPath);
 				if (f.exists() && f.isDirectory()) {
 					iconDir = f;
+				}
+			}
+			if (oredictCsvPath != null) {
+				File f = new File(oredictCsvPath);
+				if (f.exists() && f.isFile()) {
+					oredictCsvFile = f;
 				}
 			}
 		} catch (Exception e) {
@@ -88,11 +97,31 @@ public class Main {
 			}
 		}
 
+		if (oredictCsvFile == null) {
+			int result = JOptionPane.showConfirmDialog(null,
+					"Do you want to select oredict.csv?\n(Select 'No' to skip Ore Dictionary support)",
+					"Select oredict.csv", JOptionPane.YES_NO_OPTION);
+
+			if (result == JOptionPane.YES_OPTION) {
+				java.awt.FileDialog csvDialog = new java.awt.FileDialog((java.awt.Frame) null,
+						"Select oredict.csv", java.awt.FileDialog.LOAD);
+				csvDialog.setFile("*.csv");
+				csvDialog.setVisible(true);
+
+				if (csvDialog.getFile() != null) {
+					oredictCsvFile = new File(csvDialog.getDirectory(), csvDialog.getFile());
+				}
+			}
+		}
+
 		// Save config
 		if (etdFile != null) {
 			props.setProperty(KEY_ETD_PATH, etdFile.getAbsolutePath());
 			if (iconDir != null) {
 				props.setProperty(KEY_ICON_PATH, iconDir.getAbsolutePath());
+			}
+			if (oredictCsvFile != null) {
+				props.setProperty(KEY_OREDICT_CSV_PATH, oredictCsvFile.getAbsolutePath());
 			}
 			try (FileOutputStream out = new FileOutputStream(CONFIG_FILE)) {
 				props.store(out, "ExternalTweaker Configuration");
@@ -118,7 +147,8 @@ public class Main {
 			ois.close();
 			fis.close();
 
-			AppFrame frame = new AppFrame(itemMappings, fluidMappings, oreDictMappings, methodList, iconDir);
+			AppFrame frame = new AppFrame(itemMappings, fluidMappings, oreDictMappings, methodList, iconDir,
+					oredictCsvFile);
 			frame.setDefaultCloseOperation(javax.swing.JFrame.EXIT_ON_CLOSE);
 			frame.setVisible(true);
 

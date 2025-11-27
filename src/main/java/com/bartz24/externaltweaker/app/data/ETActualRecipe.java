@@ -7,14 +7,14 @@ public class ETActualRecipe {
 	private String[] parameters;
 
 	public ETActualRecipe(String format, String... curParameters) {
-		recipeFormat = format;		
+		recipeFormat = format;
 		parameters = curParameters;
 	}
 
 	public String recipeToString(ETRecipeData linkedRecipe) {
 		String base = getRecipeFormat();
 		String string = base.substring(0, base.indexOf("(") + 1);
-		for (int i = 0; i < parameters.length; i++) {		
+		for (int i = 0; i < parameters.length; i++) {
 			if (!Strings.isNullOrEmpty(parameters[i])) {
 				if (parameters[i].equals("~")) {
 					string = string.substring(0, string.length() - 2);
