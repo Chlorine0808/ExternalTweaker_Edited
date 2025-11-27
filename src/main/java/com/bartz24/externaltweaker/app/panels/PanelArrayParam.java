@@ -62,57 +62,61 @@ public class PanelArrayParam extends PanelData {
 		spinnerRow.setModel(new SpinnerNumberModel(new Integer(1), new Integer(1), null, new Integer(1)));
 
 		JLabel lblNewLabel_2 = new JLabel("Current Row");
-		
+
 		JButton btnOpenGridEditor = new JButton("Grid Editor");
 		btnOpenGridEditor.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				PanelGridEditor gridPanel = new PanelGridEditor(PanelArrayParam.this);
-				int input = JOptionPane.showOptionDialog(PanelArrayParam.this, gridPanel, "Grid Editor", JOptionPane.OK_OPTION,
+				int input = JOptionPane.showOptionDialog(PanelArrayParam.this, gridPanel, "Grid Editor",
+						JOptionPane.OK_OPTION,
 						JOptionPane.PLAIN_MESSAGE, null, new Object[] { "Close" }, "Close");
 
 				gridPanel.onClose();
 				updateCurrentRow();
+				parentPanel.mainFrame.updateParameters();
+				parentPanel.mainFrame.updateRecipesList(true);
 			}
 		});
 		GroupLayout groupLayout = new GroupLayout(this);
 		groupLayout.setHorizontalGroup(
-			groupLayout.createParallelGroup(Alignment.TRAILING)
-				.addGroup(groupLayout.createSequentialGroup()
-					.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 987, Short.MAX_VALUE)
-					.addGap(0))
-				.addGroup(groupLayout.createSequentialGroup()
-					.addContainerGap(485, Short.MAX_VALUE)
-					.addComponent(btnOpenGridEditor)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(lblNewLabel_2)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(spinnerRow, GroupLayout.PREFERRED_SIZE, 79, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.UNRELATED)
-					.addComponent(lblNewLabel_1)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(spinnerSizeX, GroupLayout.PREFERRED_SIZE, 56, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(lblNewLabel)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(spinnerSizeY, GroupLayout.PREFERRED_SIZE, 56, GroupLayout.PREFERRED_SIZE)
-					.addContainerGap())
-		);
+				groupLayout.createParallelGroup(Alignment.TRAILING)
+						.addGroup(groupLayout.createSequentialGroup()
+								.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 987, Short.MAX_VALUE)
+								.addGap(0))
+						.addGroup(groupLayout.createSequentialGroup()
+								.addContainerGap(485, Short.MAX_VALUE)
+								.addComponent(btnOpenGridEditor)
+								.addPreferredGap(ComponentPlacement.RELATED)
+								.addComponent(lblNewLabel_2)
+								.addPreferredGap(ComponentPlacement.RELATED)
+								.addComponent(spinnerRow, GroupLayout.PREFERRED_SIZE, 79, GroupLayout.PREFERRED_SIZE)
+								.addPreferredGap(ComponentPlacement.UNRELATED)
+								.addComponent(lblNewLabel_1)
+								.addPreferredGap(ComponentPlacement.RELATED)
+								.addComponent(spinnerSizeX, GroupLayout.PREFERRED_SIZE, 56, GroupLayout.PREFERRED_SIZE)
+								.addPreferredGap(ComponentPlacement.RELATED)
+								.addComponent(lblNewLabel)
+								.addPreferredGap(ComponentPlacement.RELATED)
+								.addComponent(spinnerSizeY, GroupLayout.PREFERRED_SIZE, 56, GroupLayout.PREFERRED_SIZE)
+								.addContainerGap()));
 		groupLayout.setVerticalGroup(
-			groupLayout.createParallelGroup(Alignment.LEADING)
-				.addGroup(groupLayout.createSequentialGroup()
-					.addContainerGap()
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(spinnerSizeX, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-						.addComponent(spinnerSizeY, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-						.addComponent(lblNewLabel)
-						.addComponent(lblNewLabel_1)
-						.addComponent(spinnerRow, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-						.addComponent(lblNewLabel_2)
-						.addComponent(btnOpenGridEditor))
-					.addGap(5)
-					.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 799, Short.MAX_VALUE)
-					.addContainerGap())
-		);
+				groupLayout.createParallelGroup(Alignment.LEADING)
+						.addGroup(groupLayout.createSequentialGroup()
+								.addContainerGap()
+								.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
+										.addComponent(spinnerSizeX, GroupLayout.PREFERRED_SIZE,
+												GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+										.addComponent(spinnerSizeY, GroupLayout.PREFERRED_SIZE,
+												GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+										.addComponent(lblNewLabel)
+										.addComponent(lblNewLabel_1)
+										.addComponent(spinnerRow, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE,
+												GroupLayout.PREFERRED_SIZE)
+										.addComponent(lblNewLabel_2)
+										.addComponent(btnOpenGridEditor))
+								.addGap(5)
+								.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 799, Short.MAX_VALUE)
+								.addContainerGap()));
 		setLayout(groupLayout);
 		spinnerRow.setEnabled(isDoubleArray());
 		spinnerSizeY.setEnabled(isDoubleArray());
@@ -165,7 +169,7 @@ public class PanelArrayParam extends PanelData {
 
 	private String[] getSingleArray(String data) {
 		String newData = data.substring(1, data.length() - 1);
-		
+
 		HashMap<Integer, String> arrayIndexes = new HashMap();
 		boolean changedSomething = true;
 		while (changedSomething) {
@@ -223,7 +227,7 @@ public class PanelArrayParam extends PanelData {
 			}
 			paramList.set(i, p);
 		}
-		
+
 		return paramList.toArray(new String[paramList.size()]);
 	}
 
@@ -293,7 +297,8 @@ public class PanelArrayParam extends PanelData {
 			public void stateChanged(ChangeEvent evt) {
 				if (!parentPanel.importing && !changingSize) {
 					changingSize = true;
-					String[][] newData = new String[(Integer) spinnerSizeY.getValue()][(Integer) spinnerSizeX.getValue()];
+					String[][] newData = new String[(Integer) spinnerSizeY.getValue()][(Integer) spinnerSizeX
+							.getValue()];
 					for (int y = 0; y < data.length; y++) {
 						for (int x = 0; x < data[0].length; x++) {
 							if (y >= newData.length || x >= newData[0].length)
@@ -314,7 +319,8 @@ public class PanelArrayParam extends PanelData {
 			public void stateChanged(ChangeEvent evt) {
 				if (!parentPanel.importing && !changingSize) {
 					changingSize = true;
-					String[][] newData = new String[(Integer) spinnerSizeY.getValue()][(Integer) spinnerSizeX.getValue()];
+					String[][] newData = new String[(Integer) spinnerSizeY.getValue()][(Integer) spinnerSizeX
+							.getValue()];
 					for (int y = 0; y < data.length; y++) {
 						for (int x = 0; x < data[0].length; x++) {
 							if (y >= newData.length || x >= newData[0].length)

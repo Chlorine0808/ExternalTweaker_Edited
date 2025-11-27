@@ -27,3 +27,8 @@ jars
 *.class
 standalone_bin/
 
+# user config and data
+config.properties
+*.etd
+oredict.csv
+

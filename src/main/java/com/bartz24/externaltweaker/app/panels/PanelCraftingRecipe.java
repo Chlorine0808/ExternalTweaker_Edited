@@ -214,16 +214,23 @@ public class PanelCraftingRecipe extends JPanel {
             public boolean importData(TransferSupport support) {
                 try {
                     Transferable t = support.getTransferable();
-                    String data = (String) t.getTransferData(DataFlavor.stringFlavor);
                     JButton btn = (JButton) support.getComponent();
+
+                    if (t instanceof ButtonTransferable && ((ButtonTransferable) t).getSource() == btn) {
+                        return false;
+                    }
+
+                    String data = (String) t.getTransferData(DataFlavor.stringFlavor);
 
                     if (btn == outputButton) {
                         setOutputItem(data);
                     } else {
+                        // Find which grid button this is
                         for (int y = 0; y < 3; y++) {
                             for (int x = 0; x < 3; x++) {
                                 if (gridButtons[y][x] == btn) {
                                     setGridItem(x, y, data);
+                                    saveToRecipe();
                                     return true;
                                 }
                             }
@@ -260,7 +267,7 @@ public class PanelCraftingRecipe extends JPanel {
                 }
                 if (data == null || data.equals("null") || data.isEmpty())
                     return null;
-                return new StringSelection(data);
+                return new ButtonTransferable(btn, data);
             }
 
             @Override
@@ -328,6 +335,39 @@ public class PanelCraftingRecipe extends JPanel {
                                                 .addComponent(trashPanel, GroupLayout.PREFERRED_SIZE,
                                                         GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)))
                                 .addContainerGap()));
+    }
+
+    private class ButtonTransferable implements Transferable {
+        private JButton btn;
+        private String data;
+
+        public ButtonTransferable(JButton btn, String data) {
+            this.btn = btn;
+            this.data = data;
+        }
+
+        @Override
+        public DataFlavor[] getTransferDataFlavors() {
+            return new DataFlavor[] { DataFlavor.stringFlavor };
+        }
+
+        @Override
+        public boolean isDataFlavorSupported(DataFlavor flavor) {
+            return DataFlavor.stringFlavor.equals(flavor);
+        }
+
+        @Override
+        public Object getTransferData(DataFlavor flavor)
+                throws java.awt.datatransfer.UnsupportedFlavorException, java.io.IOException {
+            if (DataFlavor.stringFlavor.equals(flavor)) {
+                return data;
+            }
+            throw new java.awt.datatransfer.UnsupportedFlavorException(flavor);
+        }
+
+        public JButton getSource() {
+            return btn;
+        }
     }
 
     public void setGridItem(int x, int y, String item) {
