@@ -38,14 +38,19 @@ public class PanelImportExportDialog extends JPanel {
 		JButton btnPath = new JButton("...");
 		btnPath.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				JFileChooser fc = new JFileChooser();
-				fc.setFileFilter(new FileNameExtensionFilter("External Tweaker Data", "etd"));
-				fc.setCurrentDirectory(!Strings.isNullOrEmpty(txtPath.getText()) ? new File(txtPath.getText().trim())
-						: (new File(System.getProperty("user.dir")
-								+ (!PanelImportExportDialog.this.importing ? File.separator + "externalTweaker.etd" : ""))));
-				if ((PanelImportExportDialog.this.importing ? fc.showOpenDialog(PanelImportExportDialog.this)
-						: fc.showSaveDialog(PanelImportExportDialog.this)) == JFileChooser.APPROVE_OPTION) {
-					String path = fc.getSelectedFile().getAbsolutePath();
+				java.awt.FileDialog fd = new java.awt.FileDialog(
+						(java.awt.Frame) javax.swing.SwingUtilities.getWindowAncestor(PanelImportExportDialog.this),
+						PanelImportExportDialog.this.importing ? "Import Data" : "Export Data",
+						PanelImportExportDialog.this.importing ? java.awt.FileDialog.LOAD : java.awt.FileDialog.SAVE);
+				fd.setFile("*.etd");
+				fd.setDirectory(!Strings.isNullOrEmpty(txtPath.getText()) ? txtPath.getText().trim()
+						: (System.getProperty("user.dir")
+								+ (!PanelImportExportDialog.this.importing ? File.separator + "externalTweaker.etd"
+										: "")));
+				fd.setVisible(true);
+
+				if (fd.getFile() != null) {
+					String path = new File(fd.getDirectory(), fd.getFile()).getAbsolutePath();
 					if (!path.endsWith(".etd"))
 						path += ".etd";
 					txtPath.setText(path);

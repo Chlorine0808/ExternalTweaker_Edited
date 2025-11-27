@@ -1,8 +1,11 @@
 package com.bartz24.externaltweaker.app;
 
+import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
@@ -24,6 +27,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 
@@ -36,6 +40,7 @@ import javax.swing.DefaultRowSorter;
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -69,12 +74,16 @@ import com.bartz24.externaltweaker.app.data.ETRecipeData;
 import com.bartz24.externaltweaker.app.data.ETScript;
 import com.bartz24.externaltweaker.app.panels.PanelImportExportDialog;
 import com.bartz24.externaltweaker.app.panels.PanelParameterEdit;
+import com.bartz24.externaltweaker.app.panels.PanelCraftingRecipe;
+import com.bartz24.externaltweaker.app.recipe.RecipeHandler;
+import com.bartz24.externaltweaker.app.recipe.ShapedCraftingHandler;
 
 public class AppFrame extends JFrame {
 	Object[][] itemMappings;
 	Object[][] fluidMappings;
 	Object[][] oreDictMappings;
 	public JTable table;
+	public List<String> blacklist = new ArrayList<>();
 	public JScrollPane tableScroll;
 	public JList listMethods;
 	public JScrollPane scrollMethods;
@@ -82,6 +91,7 @@ public class AppFrame extends JFrame {
 	public List<PanelParameterEdit> paramPanels = new ArrayList();
 	public List<ETRecipeData> recipeData = new ArrayList();
 	public List<ETScript> scripts = new ArrayList();
+	public List<RecipeHandler> recipeHandlers = new ArrayList();
 	public JPanel pnlRecipeEdit;
 	public JLabel labelRecipe;
 	public JComboBox comboRecipes;
@@ -111,9 +121,15 @@ public class AppFrame extends JFrame {
 	private JMenuItem mntmExportRecipesTo;
 	private JMenuItem mntmExportCurrentTable;
 	private JMenuItem mntmRenameCurrentScript;
+	public JCheckBox chkVisualEditor;
+	public IconLoader iconLoader;
+
+	public File iconDir;
 
 	public AppFrame(Object[][] itemMappings, Object[][] fluidMappings, Object[][] oreDictMappings,
-			List<String> methods) {
+			List<String> methods, File iconDir) {
+		this.iconDir = iconDir;
+		this.iconLoader = new IconLoader(iconDir);
 		setTitle("External Tweaker");
 		// setIconImage(Toolkit.getDefaultToolkit().getImage(AppFrame.class.getResource("/book_writable.png")));
 		this.itemMappings = itemMappings;
@@ -121,8 +137,21 @@ public class AppFrame extends JFrame {
 		this.oreDictMappings = oreDictMappings;
 		this.setPreferredSize(new Dimension(1200, 800));
 
+		loadBlacklist();
+
+		recipeHandlers.add(new ShapedCraftingHandler());
+
 		for (String s : methods) {
-			recipeData.add(new ETRecipeData(s, new String[0], true));
+			boolean exists = false;
+			for (ETRecipeData data : recipeData) {
+				if (data.getRecipeFormat().equals(s)) {
+					exists = true;
+					break;
+				}
+			}
+			if (!exists) {
+				recipeData.add(new ETRecipeData(s, new String[0], true));
+			}
 		}
 		DefaultListModel model = new DefaultListModel();
 		for (String s : methodDisplays()) {
@@ -155,7 +184,41 @@ public class AppFrame extends JFrame {
 			public boolean isCellEditable(int row, int column) {
 				return false;
 			}
+
+			// Use custom renderer for the Name column (index 1) to show icon
+			public Class getColumnClass(int column) {
+				return column == 1 ? String.class : Object.class;
+			}
 		};
+
+		if (iconDir != null) {
+			table.getColumnModel().getColumn(1).setCellRenderer(new IconRenderer(iconDir));
+			table.setRowHeight(36); // Make rows taller for icons
+		}
+
+		table.setBackground(Color.decode("#FFFFFF"));
+		tableScroll = new JScrollPane(table);
+		tableScroll.getViewport().setBackground(Color.decode("#FFFFFF"));
+
+		// Enable Drag support
+		table.setDragEnabled(true);
+		table.setTransferHandler(new javax.swing.TransferHandler() {
+			@Override
+			public int getSourceActions(javax.swing.JComponent c) {
+				return COPY;
+			}
+
+			@Override
+			protected java.awt.datatransfer.Transferable createTransferable(javax.swing.JComponent c) {
+				JTable table = (JTable) c;
+				int row = table.getSelectedRow();
+				if (row < 0)
+					return null;
+				// Get the ID (column 0)
+				String text = (String) table.getValueAt(row, 0);
+				return new java.awt.datatransfer.StringSelection(text);
+			}
+		});
 
 		loadTable("Items", "");
 
@@ -176,8 +239,6 @@ public class AppFrame extends JFrame {
 				updateParameters();
 			}
 		});
-
-		tableScroll = new JScrollPane(table);
 
 		ActionListener tableSelectListener = new ActionListener() {
 			public void actionPerformed(ActionEvent actionEvent) {
@@ -221,6 +282,37 @@ public class AppFrame extends JFrame {
 
 		txtSearchTable = new JPlaceholderTextField("Search");
 		txtSearchTable.setDisabledTextColor(UIManager.getColor("Button.disabledText"));
+
+		javax.swing.Timer searchTimer = new javax.swing.Timer(300, new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				search();
+			}
+
+			public void search() {
+				loadTable(rdbtnItems.isSelected() ? "Items" : rdbtnFluids.isSelected() ? "Fluids" : "Ore Dict",
+						txtSearchTable.getText().trim().toLowerCase());
+			}
+		});
+		searchTimer.setRepeats(false);
+
+		txtSearchTable.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+			public void changedUpdate(javax.swing.event.DocumentEvent e) {
+				restartTimer();
+			}
+
+			public void removeUpdate(javax.swing.event.DocumentEvent e) {
+				restartTimer();
+			}
+
+			public void insertUpdate(javax.swing.event.DocumentEvent e) {
+				restartTimer();
+			}
+
+			public void restartTimer() {
+				searchTimer.restart();
+			}
+		});
 
 		JButton btnSearchTable = new JButton("Search Table");
 		btnSearchTable.addActionListener(new ActionListener() {
@@ -433,6 +525,15 @@ public class AppFrame extends JFrame {
 		JMenuBar menuBar = new JMenuBar();
 		setJMenuBar(menuBar);
 
+		chkVisualEditor = new JCheckBox("Use Visual Editor");
+		chkVisualEditor.setSelected(true);
+		chkVisualEditor.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				updateCurrentRecipe();
+			}
+		});
+		menuBar.add(chkVisualEditor);
+
 		JMenu menuFile = new JMenu("File");
 		menuBar.add(menuFile);
 
@@ -589,6 +690,14 @@ public class AppFrame extends JFrame {
 	}
 
 	public void updateParameters() {
+		// Check if a handler is active
+		if (pnlRecipeEdit.getComponentCount() > 0 && pnlRecipeEdit.getComponent(0) instanceof PanelCraftingRecipe) {
+			// Handler handles saving automatically on change, but we can force a save here
+			// if needed
+			// or just do nothing as the panel handles it.
+			return;
+		}
+
 		for (int i = 0; i < paramPanels.size(); i++) {
 			paramPanels.get(i).editPanel.update();
 			paramPanels.get(i).btnPaste.setEnabled(paramPanels.get(i).paramType.equals(copyType));
@@ -606,40 +715,36 @@ public class AppFrame extends JFrame {
 		}
 		String[] displays = new String[getCurrentScript() == null ? 0 : getCurrentScript().recipes.size()];
 		for (int i = 0; i < (getCurrentScript() == null ? 0 : getCurrentScript().recipes.size()); i++) {
-			if (comboIndex < 0 || comboRecipes.getSelectedIndex() == i) {
-				int index = indexOfRecipeFormat(getCurrentScript().recipes.get(i).getRecipeFormat());
-				if (index >= 0) {
+			int index = indexOfRecipeFormat(getCurrentScript().recipes.get(i).getRecipeFormat());
+			if (index >= 0) {
 
-					displays[i] = getCurrentScript().recipes.get(i).recipeToString(recipeData.get(index));
-					String[] split = displays[i].substring(0, displays[i].indexOf("(")).split("\\.");
-					displays[i] = "#" + Integer.toString(i + 1) + "  " + split[split.length - 2] + "."
-							+ split[split.length - 1]
-							+ displays[i].substring(displays[i].indexOf("("), displays[i].length());
+				displays[i] = getCurrentScript().recipes.get(i).recipeToString(recipeData.get(index));
+				String[] split = displays[i].substring(0, displays[i].indexOf("(")).split("\\.");
+				displays[i] = "#" + Integer.toString(i + 1) + "  " + split[split.length - 2] + "."
+						+ split[split.length - 1]
+						+ displays[i].substring(displays[i].indexOf("("), displays[i].length());
 
-					List<Object[]> mappings = new ArrayList();
-					mappings.addAll(new ArrayList(Arrays.asList(itemMappings)));
-					mappings.addAll(new ArrayList(Arrays.asList(fluidMappings)));
-					mappings.addAll(new ArrayList(Arrays.asList(oreDictMappings)));
-					for (int x = 0; x < mappings.size(); x++) {
-						if (index >= 0) {
-							List<String> paramTypes = Arrays.asList(recipeData.get(index).getParameterTypes());
-							String newVal = "";
-							while (!newVal.equals(displays[i])) {
-								if (!newVal.equals(""))
-									displays[i] = newVal;
-								newVal = displays[i].replace(mappings.get(x)[0].toString(),
-										mappings.get(x)[1].toString());
-							}
+				List<Object[]> mappings = new ArrayList();
+				mappings.addAll(new ArrayList(Arrays.asList(itemMappings)));
+				mappings.addAll(new ArrayList(Arrays.asList(fluidMappings)));
+				mappings.addAll(new ArrayList(Arrays.asList(oreDictMappings)));
+				for (int x = 0; x < mappings.size(); x++) {
+					if (index >= 0) {
+						List<String> paramTypes = Arrays.asList(recipeData.get(index).getParameterTypes());
+						String newVal = "";
+						while (!newVal.equals(displays[i])) {
+							if (!newVal.equals(""))
+								displays[i] = newVal;
+							newVal = displays[i].replace(mappings.get(x)[0].toString(),
+									mappings.get(x)[1].toString());
 						}
 					}
+				}
 
-				} else
-					displays[i] = "#" + Integer.toString(i + 1) + "  "
-							+ getCurrentScript().recipes.get(i).getRecipeFormat()
-							+ " ERROR: DID NOT FIND RECIPE FORMAT";
-			} else {
-				displays[i] = (String) comboRecipes.getModel().getElementAt(i);
-			}
+			} else
+				displays[i] = "#" + Integer.toString(i + 1) + "  "
+						+ getCurrentScript().recipes.get(i).getRecipeFormat()
+						+ " ERROR: DID NOT FIND RECIPE FORMAT";
 		}
 
 		if (comboRecipes.getSelectedIndex() >= 0) {
@@ -685,26 +790,52 @@ public class AppFrame extends JFrame {
 		pnlRecipeEdit.removeAll();
 		paramPanels.clear();
 		if (comboRecipes.getSelectedIndex() >= 0) {
-			int index = indexOfRecipeFormat(
-					getCurrentScript().recipes.get(comboRecipes.getSelectedIndex()).getRecipeFormat());
+			ETActualRecipe currentRecipe = getCurrentScript().recipes.get(comboRecipes.getSelectedIndex());
+			String recipeFormat = currentRecipe.getRecipeFormat();
 
-			if (index >= 0) {
-				for (String s : recipeData.get(index).getParameterTypes())
-					addParameter(s);
+			// Check handlers
+			RecipeHandler activeHandler = null;
+			if (chkVisualEditor.isSelected()) {
+				for (RecipeHandler h : recipeHandlers) {
+					if (h.matches(recipeFormat)) {
+						activeHandler = h;
+						break;
+					}
+				}
+			}
 
-				for (int i = 0; i < paramPanels.size(); i++) {
+			if (activeHandler != null) {
+				PanelCraftingRecipe panel = new PanelCraftingRecipe(this, activeHandler, currentRecipe);
+				pnlRecipeEdit.add(panel);
+
+				int index = indexOfRecipeFormat(recipeFormat);
+				if (index >= 0) {
 					btnRecipeAdd.setSelected(recipeData.get(index).isAddRecipe());
 					btnRecipeRemove.setSelected(!recipeData.get(index).isAddRecipe());
-					paramPanels.get(i).txtName.setText(recipeData.get(index).getParamName(i));
-					paramPanels.get(i).importData(
-							getCurrentScript().recipes.get(comboRecipes.getSelectedIndex()).getParameterData(i));
+					recipeDisplay.setText(currentRecipe.recipeToString(recipeData.get(index)));
 				}
-				updateParameters();
-				recipeDisplay.setText(getCurrentScript().recipes.get(comboRecipes.getSelectedIndex())
-						.recipeToString(recipeData.get(index)));
+			} else {
+				// Default behavior
+				int index = indexOfRecipeFormat(recipeFormat);
 
-			} else
-				recipeDisplay.setText("");
+				if (index >= 0) {
+					for (String s : recipeData.get(index).getParameterTypes())
+						addParameter(s);
+
+					for (int i = 0; i < paramPanels.size(); i++) {
+						btnRecipeAdd.setSelected(recipeData.get(index).isAddRecipe());
+						btnRecipeRemove.setSelected(!recipeData.get(index).isAddRecipe());
+						paramPanels.get(i).txtName.setText(recipeData.get(index).getParamName(i));
+						paramPanels.get(i).importData(
+								getCurrentScript().recipes.get(comboRecipes.getSelectedIndex()).getParameterData(i));
+					}
+					updateParameters();
+					recipeDisplay.setText(getCurrentScript().recipes.get(comboRecipes.getSelectedIndex())
+							.recipeToString(recipeData.get(index)));
+
+				} else
+					recipeDisplay.setText("");
+			}
 		}
 		btnDeleteRecipe.setEnabled(comboRecipes.getSelectedIndex() >= 0);
 		btnDupeRecipe.setEnabled(comboRecipes.getSelectedIndex() >= 0);
@@ -714,27 +845,107 @@ public class AppFrame extends JFrame {
 		pnlRecipeEdit.repaint();
 	}
 
+	private void loadBlacklist() {
+		blacklist.clear();
+		File f = new File("blacklist.txt");
+		if (f.exists()) {
+			try (BufferedReader reader = new BufferedReader(new FileReader(f))) {
+				String line;
+				while ((line = reader.readLine()) != null) {
+					if (!line.trim().isEmpty())
+						blacklist.add(line.trim().toLowerCase());
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
 	private void loadTable(String type, String filter) {
 		List<RowSorter.SortKey> keys = table.getRowSorter() != null
-				? ((DefaultRowSorter) table.getRowSorter()).getSortKeys() : new ArrayList();
+				? ((DefaultRowSorter) table.getRowSorter()).getSortKeys()
+				: new ArrayList();
 		Object[][] array = type.equals("Items") ? this.itemMappings
 				: type.equals("Fluids") ? this.fluidMappings : type.equals("Ore Dict") ? this.oreDictMappings : null;
 		if (array == null)
 			return;
-		if (!Strings.isNullOrEmpty(filter)) {
-			List<Integer> indexesValid = new ArrayList();
-			for (int i = 0; i < array.length; i++) {
+
+		List<Integer> indexesValid = new ArrayList();
+		for (int i = 0; i < array.length; i++) {
+			String cleanName = stripFormatting(array[i][1].toString());
+
+			boolean blacklisted = false;
+			for (String s : blacklist) {
+				if (array[i][0].toString().toLowerCase().contains(s)
+						|| cleanName.toLowerCase().contains(s)) {
+					blacklisted = true;
+					break;
+				}
+			}
+			if (blacklisted)
+				continue;
+
+			if (!(filter == null || filter.isEmpty())) {
 				if (array[i][0].toString().toLowerCase().contains(filter)
-						|| array[i][1].toString().toLowerCase().contains(filter))
+						|| cleanName.toLowerCase().contains(filter))
 					indexesValid.add(i);
+			} else {
+				indexesValid.add(i);
 			}
-			Object[][] newArray = new Object[indexesValid.size()][2];
-			for (int i = 0; i < indexesValid.size(); i++) {
-				newArray[i][0] = array[indexesValid.get(i)][0];
-				newArray[i][1] = array[indexesValid.get(i)][1];
-			}
-			array = newArray;
 		}
+		Object[][] newArray = new Object[indexesValid.size()][2];
+		for (int i = 0; i < indexesValid.size(); i++) {
+			newArray[i][0] = array[indexesValid.get(i)][0];
+			newArray[i][1] = stripFormatting(array[indexesValid.get(i)][1].toString());
+		}
+		array = newArray;
+
+		Arrays.sort(array, new Comparator<Object[]>() {
+			@Override
+			public int compare(Object[] o1, Object[] o2) {
+				String id1 = (String) o1[0];
+				String id2 = (String) o2[0];
+
+				String mod1 = "", name1 = "";
+				int meta1 = 0;
+				try {
+					String clean1 = id1.replace("<", "").replace(">", "");
+					String[] parts1 = clean1.split(":");
+					if (parts1.length > 0)
+						mod1 = parts1[0];
+					if (parts1.length > 1)
+						name1 = parts1[1];
+					if (parts1.length > 2 && !parts1[2].equals("*"))
+						meta1 = Integer.parseInt(parts1[2]);
+				} catch (Exception e) {
+				}
+
+				String mod2 = "", name2 = "";
+				int meta2 = 0;
+				try {
+					String clean2 = id2.replace("<", "").replace(">", "");
+					String[] parts2 = clean2.split(":");
+					if (parts2.length > 0)
+						mod2 = parts2[0];
+					if (parts2.length > 1)
+						name2 = parts2[1];
+					if (parts2.length > 2 && !parts2[2].equals("*"))
+						meta2 = Integer.parseInt(parts2[2]);
+				} catch (Exception e) {
+				}
+
+				int modCompare = mod1.compareTo(mod2);
+				if (modCompare != 0)
+					return modCompare;
+
+				int nameCompare = name1.compareTo(name2);
+				if (nameCompare != 0)
+					return nameCompare;
+
+				return Integer.compare(meta1, meta2);
+			}
+		});
+
 		table.setModel(new DefaultTableModel(array, new String[] { "ID", "Name" }));
 		if (table.getRowSorter() != null) {
 			DefaultRowSorter sorter = ((DefaultRowSorter) table.getRowSorter());
@@ -743,6 +954,11 @@ public class AppFrame extends JFrame {
 		}
 
 		// table.clearSelection();
+
+		if (iconDir != null) {
+			table.getColumnModel().getColumn(1).setCellRenderer(new IconRenderer(iconDir));
+			table.setRowHeight(36); // Make rows taller for icons
+		}
 	}
 
 	private List<String> methodDisplays() {
@@ -788,16 +1004,78 @@ public class AppFrame extends JFrame {
 	public static void main(String[] args) {
 		java.awt.EventQueue.invokeLater(new Runnable() {
 			public void run() {
-				AppFrame frame = new AppFrame(new Object[0][0], new Object[0][0], new Object[0][0], new ArrayList());
+				AppFrame frame = new AppFrame(new Object[0][0], new Object[0][0], new Object[0][0], new ArrayList(),
+						null);
 				frame.setVisible(true);
 				frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 			}
 		});
 	}
 
+	// Inner class for rendering icons
+	class IconRenderer extends javax.swing.table.DefaultTableCellRenderer {
+		File iconDir;
+
+		public IconRenderer(File iconDir) {
+			this.iconDir = iconDir;
+		}
+
+		@Override
+		public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,
+				int row, int column) {
+			JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row,
+					column);
+
+			Object idObj = table.getValueAt(row, 0);
+			Object nameObj = table.getValueAt(row, 1);
+			if (idObj instanceof String) {
+				String fullId = (String) idObj;
+				String nameVal = (nameObj instanceof String) ? (String) nameObj : "";
+				javax.swing.ImageIcon icon = iconLoader.loadIcon(fullId, nameVal, 32);
+				label.setIcon(icon);
+			}
+			return label;
+		}
+	}
+
+	public String getNameFromId(String id) {
+		String name = null;
+		if (itemMappings != null) {
+			for (Object[] mapping : itemMappings) {
+				if (mapping[0].equals(id)) {
+					name = (String) mapping[1];
+					break;
+				}
+			}
+		}
+		if (name == null && fluidMappings != null) {
+			for (Object[] mapping : fluidMappings) {
+				if (mapping[0].equals(id)) {
+					name = (String) mapping[1];
+					break;
+				}
+			}
+		}
+		if (name == null && oreDictMappings != null) {
+			for (Object[] mapping : oreDictMappings) {
+				if (mapping[0].equals(id)) {
+					name = (String) mapping[1];
+					break;
+				}
+			}
+		}
+		return stripFormatting(name);
+	}
+
+	public String stripFormatting(String input) {
+		if (input == null)
+			return null;
+		return input.replaceAll("(?i)\\u00A7[0-9A-FK-OR]", "");
+	}
+
 	private void newScript() {
 		String fileName = JOptionPane.showInputDialog(this, "New script file name", "New Script.zs");
-		if (Strings.isNullOrEmpty(fileName))
+		if ((fileName == null || fileName.isEmpty()))
 			return;
 		if (!fileName.trim().endsWith(".zs"))
 			fileName = fileName.trim() + ".zs";
@@ -817,7 +1095,7 @@ public class AppFrame extends JFrame {
 					"Are you sure you want to delete this script? \n \n This will also delete the actual file!",
 					"Warning", JOptionPane.YES_NO_OPTION);
 			if (dialogResult == JOptionPane.YES_OPTION) {
-				if (!Strings.isNullOrEmpty(getCurrentScript().filePath)) {
+				if (!(getCurrentScript().filePath == null || getCurrentScript().filePath.isEmpty())) {
 					new File(getCurrentScript().filePath + File.separator + getCurrentScript().fileName).delete();
 				}
 				scripts.remove(comboScripts.getSelectedIndex());
@@ -838,7 +1116,7 @@ public class AppFrame extends JFrame {
 				JOptionPane.PLAIN_MESSAGE, null, new Object[] { "Export", "Cancel" }, "Export");
 
 		boolean[] settings = dataPanel.getSettings();
-		if (input == 0 && (Strings.isNullOrEmpty(dataPanel.txtPath.getText().trim())
+		if (input == 0 && ((dataPanel.txtPath.getText().trim() == null || dataPanel.txtPath.getText().trim().isEmpty())
 				|| !dataPanel.txtPath.getText().trim().endsWith(".etd")
 				|| (!settings[0] && !settings[1] && !settings[2] && !settings[3]))) {
 			JOptionPane.showOptionDialog(this, "Invalid file path", "Error", JOptionPane.OK_OPTION,
@@ -962,7 +1240,7 @@ public class AppFrame extends JFrame {
 					if (rList.get(i2).getRecipeFormat().equals(recipeData.get(i).getRecipeFormat())) {
 						contains = true;
 						for (int x = 0; x < rList.get(i2).getParameterTypes().length; x++) {
-							if (Strings.isNullOrEmpty(rList.get(i2).getParamName(x)))
+							if ((rList.get(i2).getParamName(x) == null || rList.get(i2).getParamName(x).isEmpty()))
 								rList.get(i2).setParamName(x, recipeData.get(i).getParamName(x));
 						}
 						break;
@@ -984,7 +1262,7 @@ public class AppFrame extends JFrame {
 				JOptionPane.PLAIN_MESSAGE, null, new Object[] { "Import", "Cancel" }, "Import");
 
 		boolean[] settings = dataPanel.getSettings();
-		if (input == 0 && (Strings.isNullOrEmpty(dataPanel.txtPath.getText().trim())
+		if (input == 0 && ((dataPanel.txtPath.getText().trim() == null || dataPanel.txtPath.getText().trim().isEmpty())
 				|| !dataPanel.txtPath.getText().trim().endsWith(".etd")
 				|| (!settings[0] && !settings[1] && !settings[2] && !settings[3]))) {
 			JOptionPane.showOptionDialog(this, "Invalid file path", "Error", JOptionPane.OK_OPTION,
@@ -1101,7 +1379,8 @@ public class AppFrame extends JFrame {
 					if (rList.get(i2).getRecipeFormat().equals(recipeData.get(i).getRecipeFormat())) {
 						contains = true;
 						for (int x = 0; x < rList.get(i2).getParameterTypes().length; x++) {
-							if (Strings.isNullOrEmpty(recipeData.get(i).getParamName(x)))
+							if ((recipeData.get(i).getParamName(x) == null
+									|| recipeData.get(i).getParamName(x).isEmpty()))
 								recipeData.get(i).setParamName(x, rList.get(i2).getParamName(x));
 						}
 						break;
@@ -1115,22 +1394,20 @@ public class AppFrame extends JFrame {
 	}
 
 	private void saveScript(ETScript script) {
-		if (Strings.isNullOrEmpty(script.filePath)) {
-			JFileChooser fc = new JFileChooser();
-			fc.setCurrentDirectory(new File(
-					!Strings.isNullOrEmpty(script.filePath) ? (script.filePath + File.separator + script.fileName)
-							: (System.getProperty("user.dir") + File.separator + script.filePath)));
-			fc.setSelectedFile(new File(script.fileName));
-			fc.setFileFilter(new FileNameExtensionFilter("ZS Scripts", "zs"));
-			if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-				script.filePath = fc.getSelectedFile().getAbsolutePath().substring(0,
-						fc.getSelectedFile().getAbsolutePath().lastIndexOf(File.separator));
-				script.fileName = fc.getSelectedFile().getAbsolutePath()
-						.substring(fc.getSelectedFile().getAbsolutePath().lastIndexOf(File.separator) + 1);
+		if ((script.filePath == null || script.filePath.isEmpty())) {
+			java.awt.FileDialog fd = new java.awt.FileDialog(this, "Save Script", java.awt.FileDialog.SAVE);
+			fd.setDirectory(System.getProperty("user.dir"));
+			fd.setFile(script.fileName);
+			fd.setVisible(true);
+
+			if (fd.getFile() != null) {
+				script.filePath = fd.getDirectory();
+				script.fileName = fd.getFile();
 				if (!script.fileName.endsWith(".zs"))
 					script.fileName += ".zs";
-			} else
+			} else {
 				return;
+			}
 		}
 
 		BufferedWriter writer = null;
@@ -1163,6 +1440,11 @@ public class AppFrame extends JFrame {
 			}
 
 			writer.close();
+
+			JOptionPane.showOptionDialog(this, "Script saved successfully!", "Saved", JOptionPane.OK_OPTION,
+					JOptionPane.PLAIN_MESSAGE,
+					null, new Object[] { "OK" }, "OK");
+
 		} catch (Exception e) {
 			e.printStackTrace();
 			JOptionPane.showOptionDialog(this, e.getLocalizedMessage(), "Error! Report this issue if you can!",
@@ -1173,15 +1455,13 @@ public class AppFrame extends JFrame {
 
 	private void openScripts() {
 		File[] files = null;
-		JFileChooser fc = new JFileChooser();
-		fc.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
-		fc.setMultiSelectionEnabled(true);
-		fc.setFileFilter(new FileNameExtensionFilter("ZS Scripts", "zs"));
-		fc.setCurrentDirectory(new File(System.getProperty("user.dir")));
-		if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-			files = fc.getSelectedFiles();
-		}
-		if (files == null)
+		java.awt.FileDialog fd = new java.awt.FileDialog(this, "Open Scripts", java.awt.FileDialog.LOAD);
+		fd.setMultipleMode(true);
+		fd.setDirectory(System.getProperty("user.dir"));
+		fd.setVisible(true);
+		files = fd.getFiles();
+
+		if (files == null || files.length == 0)
 			return;
 
 		List<File> allScripts = new ArrayList();
@@ -1213,7 +1493,7 @@ public class AppFrame extends JFrame {
 			for (String string : lines) {
 				try {
 					lineNum++;
-					if (!Strings.isNullOrEmpty(string) && !string.startsWith("#") && !string.startsWith("//")
+					if ((string != null && !string.isEmpty()) && !string.startsWith("#") && !string.startsWith("//")
 							&& !string.startsWith("/*") && !string.endsWith("*/")) {
 						if (!(lastLine + string).endsWith(";")) {
 							lastLine += string;
@@ -1437,17 +1717,18 @@ public class AppFrame extends JFrame {
 
 	private void saveCurScriptAs() {
 		ETScript script = getCurrentScript().clone();
-		JFileChooser fc = new JFileChooser();
-		fc.setCurrentDirectory(
-				new File(!Strings.isNullOrEmpty(script.filePath) ? (script.filePath + File.separator + script.fileName)
-						: (System.getProperty("user.dir") + File.separator + script.filePath)));
-		fc.setSelectedFile(new File(script.fileName));
-		fc.setFileFilter(new FileNameExtensionFilter("ZS Scripts", "zs"));
-		if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-			script.filePath = fc.getSelectedFile().getAbsolutePath().substring(0,
-					fc.getSelectedFile().getAbsolutePath().lastIndexOf(File.separator));
-			script.fileName = fc.getSelectedFile().getAbsolutePath()
-					.substring(fc.getSelectedFile().getAbsolutePath().lastIndexOf(File.separator) + 1);
+		java.awt.FileDialog fd = new java.awt.FileDialog(this, "Save Script As", java.awt.FileDialog.SAVE);
+		fd.setDirectory(!(script.filePath == null || script.filePath.isEmpty())
+				? (script.filePath + File.separator + script.fileName)
+				: (System.getProperty("user.dir") + File.separator + script.filePath));
+		if (!Strings.isNullOrEmpty(script.fileName))
+			fd.setFile(script.fileName);
+		fd.setVisible(true);
+
+		if (fd.getFile() != null) {
+			File selected = new File(fd.getDirectory(), fd.getFile());
+			script.filePath = selected.getParent();
+			script.fileName = selected.getName();
 			if (!script.fileName.endsWith(".zs"))
 				script.fileName += ".zs";
 

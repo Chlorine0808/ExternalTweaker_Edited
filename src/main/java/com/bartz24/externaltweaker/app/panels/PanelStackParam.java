@@ -33,6 +33,30 @@ public class PanelStackParam extends PanelData {
 	public PanelStackParam(PanelParameterEdit parent) {
 		super(parent);
 		stackEdit = new JTextField();
+		stackEdit.setTransferHandler(new javax.swing.TransferHandler() {
+			public boolean canImport(TransferSupport support) {
+				return support.isDataFlavorSupported(java.awt.datatransfer.DataFlavor.stringFlavor);
+			}
+
+			public boolean importData(TransferSupport support) {
+				if (!canImport(support)) {
+					return false;
+				}
+
+				try {
+					String data = (String) support.getTransferable()
+							.getTransferData(java.awt.datatransfer.DataFlavor.stringFlavor);
+					stackEdit.setText(data);
+					// Trigger update
+					parentPanel.mainFrame.updateParameters();
+					parentPanel.mainFrame.updateRecipesList(true);
+					return true;
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				return false;
+			}
+		});
 
 		btnCurSel = new JButton("Use Current Selection");
 
@@ -55,37 +79,40 @@ public class PanelStackParam extends PanelData {
 		btnAdvOption.setEnabled(false);
 		GroupLayout groupLayout_2 = new GroupLayout(this);
 		groupLayout_2.setHorizontalGroup(
-			groupLayout_2.createParallelGroup(Alignment.LEADING)
-				.addGroup(groupLayout_2.createSequentialGroup()
-					.addContainerGap()
-					.addGroup(groupLayout_2.createParallelGroup(Alignment.LEADING)
+				groupLayout_2.createParallelGroup(Alignment.LEADING)
 						.addGroup(groupLayout_2.createSequentialGroup()
-							.addComponent(btnCurSel)
-							.addPreferredGap(ComponentPlacement.UNRELATED)
-							.addComponent(stackEdit, GroupLayout.DEFAULT_SIZE, 283, Short.MAX_VALUE))
-						.addGroup(groupLayout_2.createSequentialGroup()
-							.addGap(5)
-							.addComponent(countPanel, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-							.addPreferredGap(ComponentPlacement.RELATED)
-							.addComponent(chkMeta)
-							.addPreferredGap(ComponentPlacement.RELATED)
-							.addComponent(btnAdvOption, GroupLayout.PREFERRED_SIZE, 184, Short.MAX_VALUE)))
-					.addContainerGap())
-		);
+								.addContainerGap()
+								.addGroup(groupLayout_2.createParallelGroup(Alignment.LEADING)
+										.addGroup(groupLayout_2.createSequentialGroup()
+												.addComponent(btnCurSel)
+												.addPreferredGap(ComponentPlacement.UNRELATED)
+												.addComponent(stackEdit, GroupLayout.DEFAULT_SIZE, 283,
+														Short.MAX_VALUE))
+										.addGroup(groupLayout_2.createSequentialGroup()
+												.addGap(5)
+												.addComponent(countPanel, GroupLayout.PREFERRED_SIZE,
+														GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+												.addPreferredGap(ComponentPlacement.RELATED)
+												.addComponent(chkMeta)
+												.addPreferredGap(ComponentPlacement.RELATED)
+												.addComponent(btnAdvOption, GroupLayout.PREFERRED_SIZE, 184,
+														Short.MAX_VALUE)))
+								.addContainerGap()));
 		groupLayout_2.setVerticalGroup(
-			groupLayout_2.createParallelGroup(Alignment.LEADING)
-				.addGroup(groupLayout_2.createSequentialGroup()
-					.addGroup(groupLayout_2.createParallelGroup(Alignment.BASELINE)
-						.addComponent(btnCurSel)
-						.addComponent(stackEdit, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout_2.createParallelGroup(Alignment.LEADING)
-						.addGroup(groupLayout_2.createParallelGroup(Alignment.BASELINE)
-							.addComponent(chkMeta)
-							.addComponent(btnAdvOption))
-						.addComponent(countPanel, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addContainerGap(84, Short.MAX_VALUE))
-		);
+				groupLayout_2.createParallelGroup(Alignment.LEADING)
+						.addGroup(groupLayout_2.createSequentialGroup()
+								.addGroup(groupLayout_2.createParallelGroup(Alignment.BASELINE)
+										.addComponent(btnCurSel)
+										.addComponent(stackEdit, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE,
+												GroupLayout.PREFERRED_SIZE))
+								.addPreferredGap(ComponentPlacement.RELATED)
+								.addGroup(groupLayout_2.createParallelGroup(Alignment.LEADING)
+										.addGroup(groupLayout_2.createParallelGroup(Alignment.BASELINE)
+												.addComponent(chkMeta)
+												.addComponent(btnAdvOption))
+										.addComponent(countPanel, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE,
+												GroupLayout.PREFERRED_SIZE))
+								.addContainerGap(84, Short.MAX_VALUE)));
 		this.setLayout(groupLayout_2);
 	}
 
@@ -139,7 +166,7 @@ public class PanelStackParam extends PanelData {
 	}
 
 	public void importData(String input) {
-		if(Strings.isNullOrEmpty(input) || input.equals("null"))
+		if (Strings.isNullOrEmpty(input) || input.equals("null"))
 			stackEdit.setText("null");
 		if (!Strings.isNullOrEmpty(input)) {
 			parentPanel.importing = true;

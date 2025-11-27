@@ -54,7 +54,7 @@ public class OpenTweakerCmd extends CommandBase implements ICommand {
 	@Override
 	public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
 
-		new AppFrame(getItemList(), getFluidList(), getOreDictList(), ExternalTweaker.methodList);
+		new AppFrame(getItemList(), getFluidList(), getOreDictList(), ExternalTweaker.methodList, null);
 	}
 
 	public Object[][] getItemList() {

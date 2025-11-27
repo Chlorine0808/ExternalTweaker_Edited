@@ -30,13 +30,13 @@ public class PanelStringParam extends PanelData {
 
 	public String exportData() {
 		if (Strings.isNullOrEmpty(textField.getText()))
-			return "BLANK";
+			return "";
 		return "\"" + textField.getText() + "\"";
 	}
 
 	public void importData(String input) {
-		if (Strings.isNullOrEmpty(input) || input.equals("BLANK"))
-			textField.setText("BLANK");
+		if (Strings.isNullOrEmpty(input) || input.equals(""))
+			textField.setText("");
 		else
 			textField.setText(input.substring(1, input.length() - 1));
 	}
