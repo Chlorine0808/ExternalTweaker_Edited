@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import javax.swing.AbstractButton;
+import javax.swing.ImageIcon;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.DefaultComboBoxModel;
@@ -195,7 +196,43 @@ public class AppFrame extends JFrame {
 		};
 
 		if (iconDir != null) {
-			table.getColumnModel().getColumn(1).setCellRenderer(new IconRenderer(iconDir));
+			table.getColumnModel().getColumn(1).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+				@Override
+				public java.awt.Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+						boolean hasFocus, int row, int column) {
+					javax.swing.JLabel label = (javax.swing.JLabel) super.getTableCellRendererComponent(table, value,
+							isSelected, hasFocus, row, column);
+					if (iconLoader != null) {
+						String id = (String) table.getValueAt(row, 0);
+						String name = (String) value;
+						String iconItem = id;
+						// OreDict handling
+						String rawId = Utils.unformatItemId(id);
+						if (rawId.startsWith("ore:")) {
+							String rep = getOreDictRepresentativeItem(rawId);
+							if (rep != null) {
+								iconItem = rep;
+							}
+							System.out.println("Table Renderer: ID=" + id + ", Raw=" + rawId + ", Rep=" + rep
+									+ ", IconItem=" + iconItem);
+						}
+
+						// Use the name of the iconItem for lookup, not the display name of the row
+						// (which might be the OreDict name)
+						String iconName = name;
+						if (!iconItem.equals(id)) {
+							String resolvedName = getNameFromId(iconItem);
+							if (resolvedName != null && !resolvedName.isEmpty()) {
+								iconName = resolvedName;
+							}
+						}
+
+						ImageIcon icon = iconLoader.loadIcon(iconItem, iconName, 32);
+						label.setIcon(icon);
+					}
+					return label;
+				}
+			});
 			table.setRowHeight(36); // Make rows taller for icons
 		}
 
@@ -741,13 +778,12 @@ public class AppFrame extends JFrame {
 						+ split[split.length - 1]
 						+ displays[i].substring(displays[i].indexOf("("), displays[i].length());
 
-				List<Object[]> mappings = new ArrayList();
-				mappings.addAll(new ArrayList(Arrays.asList(itemMappings)));
-				mappings.addAll(new ArrayList(Arrays.asList(fluidMappings)));
-				mappings.addAll(new ArrayList(Arrays.asList(oreDictMappings)));
+				List<Object[]> mappings = new ArrayList<Object[]>();
+				mappings.addAll(new ArrayList<Object[]>(Arrays.asList(itemMappings)));
+				mappings.addAll(new ArrayList<Object[]>(Arrays.asList(fluidMappings)));
+				mappings.addAll(new ArrayList<Object[]>(Arrays.asList(oreDictMappings)));
 				for (int x = 0; x < mappings.size(); x++) {
 					if (index >= 0) {
-						List<String> paramTypes = Arrays.asList(recipeData.get(index).getParameterTypes());
 						String newVal = "";
 						while (!newVal.equals(displays[i])) {
 							if (!newVal.equals(""))
@@ -776,7 +812,7 @@ public class AppFrame extends JFrame {
 		} else
 			recipeDisplay.setText("");
 
-		comboRecipes.setModel(new DefaultComboBoxModel(displays));
+		comboRecipes.setModel(new DefaultComboBoxModel<String>(displays));
 		if (updating) {
 			comboRecipes.setSelectedIndex(comboIndex);
 			updatingParameters = false;
@@ -795,7 +831,7 @@ public class AppFrame extends JFrame {
 					+ (Strings.isNullOrEmpty(scripts.get(i).filePath) ? "" : File.separator) + scripts.get(i).fileName;
 		}
 
-		comboScripts.setModel(new DefaultComboBoxModel(displays));
+		comboScripts.setModel(new DefaultComboBoxModel<String>(displays));
 		if (updating) {
 			comboScripts.setSelectedIndex(comboIndex);
 			updatingParameters = false;
@@ -881,13 +917,13 @@ public class AppFrame extends JFrame {
 	private void loadTable(String type, String filter) {
 		List<RowSorter.SortKey> keys = table.getRowSorter() != null
 				? ((DefaultRowSorter) table.getRowSorter()).getSortKeys()
-				: new ArrayList();
+				: new ArrayList<RowSorter.SortKey>();
 		Object[][] array = type.equals("Items") ? this.itemMappings
 				: type.equals("Fluids") ? this.fluidMappings : type.equals("Ore Dict") ? this.oreDictMappings : null;
 		if (array == null)
 			return;
 
-		List<Integer> indexesValid = new ArrayList();
+		List<Integer> indexesValid = new ArrayList<Integer>();
 		for (int i = 0; i < array.length; i++) {
 			String cleanName = stripFormatting(array[i][1].toString());
 
@@ -964,6 +1000,9 @@ public class AppFrame extends JFrame {
 		});
 
 		table.setModel(new DefaultTableModel(array, new String[] { "ID", "Name" }));
+		if (table.getColumnCount() > 2) {
+			table.getColumnModel().removeColumn(table.getColumnModel().getColumn(2));
+		}
 		if (table.getRowSorter() != null) {
 			DefaultRowSorter sorter = ((DefaultRowSorter) table.getRowSorter());
 			sorter.setSortKeys(keys);
@@ -979,8 +1018,8 @@ public class AppFrame extends JFrame {
 	}
 
 	private List<String> methodDisplays() {
-		List<String> displays = new ArrayList();
-		List<ETRecipeData> recipeDataNew = new ArrayList();
+		List<String> displays = new ArrayList<String>();
+		List<ETRecipeData> recipeDataNew = new ArrayList<ETRecipeData>();
 		for (ETRecipeData data : recipeData) {
 			displays.add(data.getRecipeDisplay());
 		}
@@ -1005,7 +1044,6 @@ public class AppFrame extends JFrame {
 
 	private void addParameter(String type) {
 		type = type.trim();
-		String subtype = type.startsWith("optional.") ? type.substring("optional.".length()) : type;
 		PanelParameterEdit p = new PanelParameterEdit(paramPanels.size() + 1, type, this);
 		p.setListeners();
 		pnlRecipeEdit.add(p);
@@ -1046,41 +1084,97 @@ public class AppFrame extends JFrame {
 			Object idObj = table.getValueAt(row, 0);
 			Object nameObj = table.getValueAt(row, 1);
 			if (idObj instanceof String) {
-				String fullId = (String) idObj;
-				String nameVal = (nameObj instanceof String) ? (String) nameObj : "";
-				javax.swing.ImageIcon icon = iconLoader.loadIcon(fullId, nameVal, 32);
+				String id = (String) idObj;
+				String name = (nameObj instanceof String) ? (String) nameObj : "";
+				String iconItem = id;
+
+				// OreDict handling
+				String rawId = Utils.unformatItemId(id);
+				if (rawId.startsWith("ore:")) {
+					String rep = null;
+					// Try getting from model first
+					int modelRow = table.convertRowIndexToModel(row);
+					if (table.getModel().getColumnCount() > 2) {
+						Object val = table.getModel().getValueAt(modelRow, 2);
+						if (val instanceof String)
+							rep = (String) val;
+					}
+
+					if (rep == null)
+						rep = getOreDictRepresentativeItem(rawId);
+
+					if (rep != null) {
+						iconItem = rep;
+					}
+					System.out.println("Table Renderer: ID=" + id + ", Raw=" + rawId + ", Rep=" + rep
+							+ ", IconItem=" + iconItem);
+				}
+
+				// Use the name of the iconItem for lookup, not the display name of the row
+				// (which might be the OreDict name)
+				String iconName = name;
+				if (!iconItem.equals(id)) {
+					String resolvedName = getNameFromId(iconItem);
+					if (resolvedName != null && !resolvedName.isEmpty()) {
+						iconName = resolvedName;
+					}
+				}
+
+				javax.swing.ImageIcon icon = iconLoader.loadIcon(iconItem, iconName, 32);
 				label.setIcon(icon);
 			}
 			return label;
 		}
+
 	}
 
 	public String getNameFromId(String id) {
 		String name = null;
+		String unformattedId = Utils.unformatItemId(id);
+
+		// System.out.println("getNameFromId: Looking up " + id + " (Unformatted: " +
+		// unformattedId + ")");
+
 		if (itemMappings != null) {
 			for (Object[] mapping : itemMappings) {
-				if (mapping[0].equals(id)) {
+				String mapId = (String) mapping[0];
+				if (mapId.equals(id) || Utils.unformatItemId(mapId).equals(unformattedId)) {
 					name = (String) mapping[1];
+					// System.out.println(" Found in itemMappings: " + name);
 					break;
 				}
 			}
 		}
 		if (name == null && fluidMappings != null) {
 			for (Object[] mapping : fluidMappings) {
-				if (mapping[0].equals(id)) {
+				String mapId = (String) mapping[0];
+				if (mapId.equals(id) || Utils.unformatItemId(mapId).equals(unformattedId)) {
 					name = (String) mapping[1];
+					// System.out.println(" Found in fluidMappings: " + name);
 					break;
 				}
 			}
 		}
 		if (name == null && oreDictMappings != null) {
 			for (Object[] mapping : oreDictMappings) {
-				if (mapping[0].equals(id)) {
+				String mapId = (String) mapping[0];
+				if (mapId.equals(id) || Utils.unformatItemId(mapId).equals(unformattedId)) {
 					name = (String) mapping[1];
+					// System.out.println(" Found in oreDictMappings: " + name);
 					break;
 				}
 			}
 		}
+		if (!unformattedId.equals(id)) {
+			// ... existing comments ...
+		}
+
+		if (name == null) {
+			System.out.println("getNameFromId: FAILED to find name for " + id);
+		} else {
+			// System.out.println("getNameFromId: Resolved " + id + " -> " + name);
+		}
+
 		return stripFormatting(name);
 	}
 
@@ -1195,10 +1289,10 @@ public class AppFrame extends JFrame {
 
 	private void exportAdd(boolean[] settings, String savePath, ObjectInputStream cur)
 			throws IOException, ClassNotFoundException {
-		List<Object[]> iMap = new ArrayList(Arrays.asList((Object[][]) cur.readObject()));
-		List<Object[]> fMap = new ArrayList(Arrays.asList((Object[][]) cur.readObject()));
-		List<Object[]> oMap = new ArrayList(Arrays.asList((Object[][]) cur.readObject()));
-		List<ETRecipeData> rList = (ArrayList) cur.readObject();
+		List<Object[]> iMap = new ArrayList<Object[]>(Arrays.asList((Object[][]) cur.readObject()));
+		List<Object[]> fMap = new ArrayList<Object[]>(Arrays.asList((Object[][]) cur.readObject()));
+		List<Object[]> oMap = new ArrayList<Object[]>(Arrays.asList((Object[][]) cur.readObject()));
+		List<ETRecipeData> rList = (ArrayList<ETRecipeData>) cur.readObject();
 		cur.close();
 		FileOutputStream file = new FileOutputStream(savePath);
 		ObjectOutputStream save = new ObjectOutputStream(file);
@@ -1298,7 +1392,7 @@ public class AppFrame extends JFrame {
 				importAdd(settings, save);
 			}
 
-			DefaultListModel model = new DefaultListModel();
+			DefaultListModel<String> model = new DefaultListModel<String>();
 			for (String s : methodDisplays()) {
 				model.addElement(s);
 			}
@@ -1331,7 +1425,7 @@ public class AppFrame extends JFrame {
 		else
 			save.readObject();
 		if (settings[0])
-			recipeData = (ArrayList) save.readObject();
+			recipeData = (ArrayList<ETRecipeData>) save.readObject();
 		else
 			save.readObject();
 	}
@@ -1339,7 +1433,7 @@ public class AppFrame extends JFrame {
 	private void importAdd(boolean[] settings, ObjectInputStream save) throws IOException, ClassNotFoundException {
 		if (settings[1]) {
 			Object[][] iMap = (Object[][]) save.readObject();
-			List<Object[]> iMappings = new ArrayList(Arrays.asList(itemMappings));
+			List<Object[]> iMappings = new ArrayList<Object[]>(Arrays.asList(itemMappings));
 			for (int i = 0; i < iMap.length; i++) {
 				boolean contains = false;
 				for (int i2 = 0; i2 < iMappings.size(); i2++) {
@@ -1481,7 +1575,7 @@ public class AppFrame extends JFrame {
 		if (files == null || files.length == 0)
 			return;
 
-		List<File> allScripts = new ArrayList();
+		List<File> allScripts = new ArrayList<File>();
 		for (File f : files) {
 			allScripts.addAll(f.isDirectory() ? getScripts(f) : Collections.singletonList(f));
 		}
@@ -1491,7 +1585,7 @@ public class AppFrame extends JFrame {
 					f.getAbsolutePath().substring(0, f.getAbsolutePath().lastIndexOf(File.separator)),
 					f.getAbsolutePath().substring(f.getAbsolutePath().lastIndexOf(File.separator) + 1));
 
-			List<String> lines = new ArrayList();
+			List<String> lines = new ArrayList<String>();
 			try (BufferedReader reader = new BufferedReader(new FileReader(f))) {
 				String line = null;
 				while ((line = reader.readLine()) != null) {
@@ -1506,7 +1600,7 @@ public class AppFrame extends JFrame {
 			boolean skippingScript = false;
 			int lineNum = 0;
 			String lastLine = "";
-			HashMap<String, String> variables = new HashMap();
+			HashMap<String, String> variables = new HashMap<String, String>();
 			for (String string : lines) {
 				try {
 					lineNum++;
@@ -1526,8 +1620,8 @@ public class AppFrame extends JFrame {
 						ETRecipeData d = findRecipeDataForRecipe(s);
 						if (d != null) {
 							String params = s.substring(s.indexOf("(") + 1, s.lastIndexOf(")"));
-							HashMap<Integer, String> arrayIndexes = new HashMap();
-							List<String> paramList = new ArrayList();
+							HashMap<Integer, String> arrayIndexes = new HashMap<Integer, String>();
+							List<String> paramList = new ArrayList<String>();
 							boolean varGoThroughAgain = true;
 							while (varGoThroughAgain) {
 								varGoThroughAgain = false;
@@ -1619,7 +1713,7 @@ public class AppFrame extends JFrame {
 										}
 								}
 
-								paramList = new ArrayList(Arrays.asList(params.split(",")));
+								paramList = new ArrayList<String>(Arrays.asList(params.split(",")));
 								for (int i = 0; i < paramList.size(); i++) {
 									paramList.set(i, paramList.get(i).trim());
 									boolean changed = true;
@@ -1878,85 +1972,95 @@ public class AppFrame extends JFrame {
 				}
 				// Ore Name,ItemStack,Item ID,Display Name,Wildcard
 				String[] parts = line.split(",");
-				if (parts.length >= 3) {
-					String oreName = parts[0].trim();
-					String itemId = parts[2].trim();
-
-					if (!itemToOreDict.containsKey(itemId)) {
-						itemToOreDict.put(itemId, new ArrayList<>());
-					}
-					if (!itemToOreDict.get(itemId).contains(oreName)) {
-						itemToOreDict.get(itemId).add(oreName);
-					}
-
-					if (!oreDictToItems.containsKey(oreName)) {
-						oreDictToItems.put(oreName, new ArrayList<>());
-					}
-					if (!oreDictToItems.get(oreName).contains(itemId)) {
-						oreDictToItems.get(oreName).add(itemId);
-					}
-					count++;
+				if (parts.length < 4) {
+					System.out.println("Invalid line: " + line);
+					continue;
 				}
+				String oreName = parts[0].trim();
+				String itemMeta = parts[1].contains("@") ? parts[1].split("@")[1] : "0";
+				// IDにメタデータを付与し、さらに<>で囲む (例: <minecraft:wool:1>)
+				String rawItemId = parts[2].trim() + (itemMeta.equals("0") ? "" : ":" + itemMeta);
+				String itemId = Utils.formatItemId(rawItemId);
+
+				// Item ID -> OreDict Nameのリストへのマッピング (順方向)
+				// まだキーが存在しなければリストを作成
+				if (!itemToOreDict.containsKey(itemId)) {
+					itemToOreDict.put(itemId, new ArrayList<>());
+				}
+				// リストにOreDict名が含まれていなければ追加
+				if (!itemToOreDict.get(itemId).contains(oreName)) {
+					itemToOreDict.get(itemId).add(oreName);
+				}
+
+				// OreDict Name -> Item IDのリストへのマッピング (逆方向)
+				String oreDictKey = Utils.formatItemId("ore:" + oreName);
+				// まだキーが存在しなければリストを作成
+				if (!oreDictToItems.containsKey(oreDictKey)) {
+					oreDictToItems.put(oreDictKey, new ArrayList<>());
+					if (count < 5)
+						System.out.println("Loaded OreDict Key: " + oreDictKey + " -> " + itemId);
+				}
+				// リストにItem IDが含まれていなければ追加
+				if (!oreDictToItems.get(oreDictKey).contains(itemId)) {
+					oreDictToItems.get(oreDictKey).add(itemId);
+				}
+				count++;
 			}
-			System.out.println("Loaded " + count + " OreDict entries.");
+
+			// Update oreDictMappings for the table
+			List<Object[]> newOreDictMappings = new ArrayList<>();
+			for (String key : oreDictToItems.keySet()) {
+				// Filter out empty OreDicts
+				if (oreDictToItems.get(key).isEmpty())
+					continue;
+
+				// Column 0: ID (<ore:name>), Column 1: Name (oreName), Column 2: Representative
+				// Item
+				String name = key.replace("<ore:", "").replace(">", "");
+				String repItem = Utils.formatItemId(oreDictToItems.get(key).get(0));
+				newOreDictMappings.add(new Object[] { key, name, repItem });
+			}
+			oreDictMappings = newOreDictMappings.toArray(new Object[0][0]);
+
+			System.out.println("Loaded " + count + " OreDict entries. Map size: " + oreDictToItems.size());
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
 
 	public List<String> getOreDicts(String itemId) {
+		// modID:itemID:metaが所属するoreDictを返す
 		if (itemId == null)
 			return Collections.emptyList();
 
-		System.out.println("Looking up OreDict for: " + itemId);
+		// Ensure angle brackets are present
+		itemId = Utils.formatItemId(itemId);
+		// System.out.println("getOreDicts looking up: " + itemId);
 
 		if (itemToOreDict.containsKey(itemId)) {
-			System.out.println("Found exact match: " + itemToOreDict.get(itemId));
+			// System.out.println("Found exact match: " + itemToOreDict.get(itemId));
 			return itemToOreDict.get(itemId);
 		}
-
-		if (itemId.contains(":")) {
-			String[] parts = itemId.split(":");
-			if (parts.length > 2) {
-				String noMeta = parts[0] + ":" + parts[1];
-				System.out.println("Trying without meta: " + noMeta);
-				if (itemToOreDict.containsKey(noMeta)) {
-					System.out.println("Found match without meta: " + itemToOreDict.get(noMeta));
-					return itemToOreDict.get(noMeta);
-				}
-			} else {
-				// Try adding :0
-				String withMeta = itemId + ":0";
-				System.out.println("Trying with :0: " + withMeta);
-				if (itemToOreDict.containsKey(withMeta)) {
-					System.out.println("Found match with :0: " + itemToOreDict.get(withMeta));
-					return itemToOreDict.get(withMeta);
-				}
-
-				// Try adding :*
-				String withWildcard = itemId + ":*";
-				System.out.println("Trying with :*: " + withWildcard);
-				if (itemToOreDict.containsKey(withWildcard)) {
-					System.out.println("Found match with :*: " + itemToOreDict.get(withWildcard));
-					return itemToOreDict.get(withWildcard);
-				}
-			}
-		}
-		System.out.println("No OreDict found for: " + itemId);
+		// System.out.println("No OreDict found for: " + itemId);
 		return Collections.emptyList();
 	}
 
 	public String getOreDictRepresentativeItem(String oreName) {
 		if (oreName == null)
 			return null;
-		if (oreName.startsWith("ore:"))
-			oreName = oreName.substring(4);
 
-		if (oreDictToItems.containsKey(oreName)) {
-			List<String> items = oreDictToItems.get(oreName);
+		// Ensure lookup key is formatted as <ore:name>
+		String lookupKey = Utils.formatItemId(oreName);
+
+		if (oreDictToItems.containsKey(lookupKey)) {
+			List<String> items = oreDictToItems.get(lookupKey);
 			if (!items.isEmpty()) {
-				return items.get(0);
+				// Items stored in map should already have brackets
+				return Utils.formatItemId(items.get(0));
 			}
+		} else {
+			// System.out.println("getOreDictRepresentativeItem: Key not found: " +
+			// lookupKey);
 		}
 		return null;
 	}

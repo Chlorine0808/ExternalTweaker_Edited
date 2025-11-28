@@ -24,6 +24,7 @@ import javax.swing.SwingConstants;
 import javax.swing.TransferHandler;
 
 import com.bartz24.externaltweaker.app.AppFrame;
+import com.bartz24.externaltweaker.app.Utils;
 import com.bartz24.externaltweaker.app.data.ETActualRecipe;
 import com.bartz24.externaltweaker.app.recipe.RecipeHandler;
 
@@ -73,7 +74,7 @@ public class PanelCraftingRecipe extends JPanel {
             public boolean importData(TransferSupport support) {
                 try {
                     Transferable t = support.getTransferable();
-                    String data = (String) t.getTransferData(DataFlavor.stringFlavor);
+                    String data = Utils.formatItemId((String) t.getTransferData(DataFlavor.stringFlavor));
                     JButton btn = (JButton) support.getComponent();
 
                     if (btn == outputButton) {
@@ -289,11 +290,12 @@ public class PanelCraftingRecipe extends JPanel {
                         return false;
                     }
 
-                    String data = (String) t.getTransferData(DataFlavor.stringFlavor);
+                    String data = Utils.formatItemId((String) t.getTransferData(DataFlavor.stringFlavor));
 
                     if (btn == outputButton) {
-                        if (data.startsWith("ore:")) {
-                            String rep = mainFrame.getOreDictRepresentativeItem(data);
+                        String rawData = Utils.unformatItemId(data);
+                        if (rawData.startsWith("ore:")) {
+                            String rep = mainFrame.getOreDictRepresentativeItem(rawData);
                             if (rep != null) {
                                 data = rep;
                             }
@@ -330,9 +332,11 @@ public class PanelCraftingRecipe extends JPanel {
                                     }
 
                                     if (chkUseOreDict.isSelected()) {
+                                        System.out.println("Checking OreDict for: " + data);
                                         java.util.List<String> ores = mainFrame.getOreDicts(data);
                                         if (!ores.isEmpty()) {
-                                            data = "ore:" + ores.get(0);
+                                            data = Utils.formatItemId("ore:" + ores.get(0));
+                                            System.out.println("Converted to OreDict: " + data);
                                         }
                                     }
                                     setGridItem(x, y, data);
@@ -380,7 +384,7 @@ public class PanelCraftingRecipe extends JPanel {
             protected void exportDone(JComponent source, Transferable data, int action) {
                 if (action == MOVE) {
                     if (draggedButton == null) {
-                         // Swapped, do nothing
+                        // Swapped, do nothing
                     } else {
                         JButton btn = (JButton) source;
                         if (btn == outputButton) {
@@ -459,49 +463,45 @@ public class PanelCraftingRecipe extends JPanel {
 
     private void cycleItem(int x, int y, boolean next) {
         String current = gridData[y][x];
-        if (current == null || current.equals("null") || current.isEmpty())
+        if (current == null || current.equals("null"))
             return;
 
-        String itemId = current;
-        if (current.startsWith("ore:")) {
-            // If currently ore, get representative item to find base ID?
-            // Or we need to know the base ID to cycle back to it.
-            // This is tricky if we don't store the base ID.
-            // But we can try to find the ore dict list and see if we can cycle.
-            // If we have "ore:logWood", we don't know which log it was originally.
-            // But maybe we can just cycle through available ore dicts for the *current* ore
-            // dict?
-            // No, we want to cycle Item -> Ore1 -> Ore2 -> Item.
-            // If we only have "ore:logWood", we can't go back to "minecraft:log" unless we
-            // stored it.
-            // However, for now, let's assume we can only cycle if we have the item ID or if
-            // we can find the item ID from the ore dict (representative).
-            // Let's use the representative item as the "base" if we are in ore mode.
+        // 1. Determine the base item ID
+        String baseItem = current;
+        String rawCurrent = Utils.unformatItemId(current);
+        if (rawCurrent.startsWith("ore:")) {
             String rep = mainFrame.getOreDictRepresentativeItem(current);
-            if (rep != null)
-                itemId = rep;
+            if (rep != null) {
+                baseItem = rep;
+            }
         }
 
-        // This logic is slightly flawed if we lose the original item ID.
-        // But for this implementation, let's try to look up ore dicts for the current
-        // item (if it's an item)
-        // or the representative item (if it's an ore dict).
+        System.out.println("Cycling item. Current: " + current + ", Base: " + baseItem);
 
-        java.util.List<String> ores = mainFrame.getOreDicts(itemId);
-        if (ores.isEmpty()) {
-            System.out.println("No OreDict entries found for cycling: " + itemId);
+        // 2. Get all OreDicts for the base item
+        java.util.List<String> ores = mainFrame.getOreDicts(baseItem);
+
+        // 3. Create options list: [BaseItem, <ore:Dict1>, <ore:Dict2>, ...]
+        java.util.List<String> options = new java.util.ArrayList<>();
+        options.add(Utils.formatItemId(baseItem));
+        for (String ore : ores) {
+            options.add(Utils.formatItemId("ore:" + ore));
+        }
+
+        if (options.size() <= 1) {
+            System.out.println("No alternatives to cycle.");
             return;
         }
 
-        java.util.List<String> options = new java.util.ArrayList<>();
-        options.add(itemId);
-        for (String ore : ores) {
-            options.add("ore:" + ore);
-        }
-
+        // 4. Find current index and cycle
         int index = options.indexOf(current);
-        if (index == -1)
-            index = 0; // Should be found if logic is correct, else default to item
+        // If current is not in options (maybe it was an OreDict but we switched base
+        // item logic?),
+        // default to 0 (Base Item)
+        if (index == -1) {
+            System.out.println("Current item not in options. Resetting to base.");
+            index = 0;
+        }
 
         if (next) {
             index++;
@@ -513,7 +513,11 @@ public class PanelCraftingRecipe extends JPanel {
                 index = options.size() - 1;
         }
 
-        setGridItem(x, y, options.get(index));
+        String newItem = options.get(index);
+        System.out.println("Cycled to: " + newItem);
+        // Pass baseItem as icon override to keep the icon constant
+        setGridItem(x, y, newItem, baseItem);
+        updateSelectionDisplay();
         saveToRecipe();
     }
 
@@ -551,8 +555,12 @@ public class PanelCraftingRecipe extends JPanel {
     }
 
     public void setGridItem(int x, int y, String item) {
-        gridData[y][x] = item;
-        updateButtonDisplay(gridButtons[y][x], item, 64);
+        setGridItem(x, y, item, null);
+    }
+
+    public void setGridItem(int x, int y, String item, String iconOverride) {
+        gridData[y][x] = Utils.formatItemId(item);
+        updateButtonDisplay(gridButtons[y][x], item, 64, iconOverride);
     }
 
     public String getGridItem(int x, int y) {
@@ -560,8 +568,8 @@ public class PanelCraftingRecipe extends JPanel {
     }
 
     public void setOutputItem(String item) {
-        outputData = item;
-        updateButtonDisplay(outputButton, item, 80);
+        outputData = Utils.formatItemId(item);
+        updateButtonDisplay(outputButton, item, 80, null);
     }
 
     public String getOutputItem() {
@@ -569,6 +577,10 @@ public class PanelCraftingRecipe extends JPanel {
     }
 
     private void updateButtonDisplay(JButton btn, String item, int iconSize) {
+        updateButtonDisplay(btn, item, iconSize, null);
+    }
+
+    private void updateButtonDisplay(JButton btn, String item, int iconSize, String iconOverride) {
         if (item == null || item.equals("null") || item.isEmpty()) {
             btn.setText("");
             btn.setIcon(null);
@@ -577,6 +589,7 @@ public class PanelCraftingRecipe extends JPanel {
         }
 
         String name = mainFrame.getNameFromId(item);
+        System.out.println("updateButtonDisplay: item=" + item + ", name=" + name);
         if (name == null || name.isEmpty()) {
             name = item;
             if (item.contains(":")) {
@@ -591,12 +604,27 @@ public class PanelCraftingRecipe extends JPanel {
 
         if (mainFrame.iconLoader != null) {
             String iconItem = item;
-            if (item.startsWith("ore:")) {
+            if (iconOverride != null) {
+                iconItem = iconOverride;
+            } else if (Utils.unformatItemId(item).startsWith("ore:")) {
                 String rep = mainFrame.getOreDictRepresentativeItem(item);
                 if (rep != null)
                     iconItem = rep;
             }
-            ImageIcon icon = mainFrame.iconLoader.loadIcon(iconItem, name, iconSize);
+            System.out.println("updateButtonDisplay: item=" + item + ", iconOverride=" + iconOverride
+                    + ", finalIconItem=" + iconItem);
+
+            // Use the name of the iconItem for lookup, not the display name of the button
+            // (which might be the OreDict name)
+            String iconName = name;
+            if (!iconItem.equals(item)) {
+                String resolvedName = mainFrame.getNameFromId(iconItem);
+                if (resolvedName != null && !resolvedName.isEmpty()) {
+                    iconName = resolvedName;
+                }
+            }
+
+            ImageIcon icon = mainFrame.iconLoader.loadIcon(iconItem, iconName, iconSize);
             btn.setIcon(icon);
         }
     }

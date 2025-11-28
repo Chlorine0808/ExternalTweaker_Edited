@@ -34,7 +34,7 @@ public class PanelArrayParam extends PanelData {
 	private JSpinner spinnerRow;
 	private JSpinner spinnerSizeX;
 	private JSpinner spinnerSizeY;
-	public List<PanelData> paramPanels = new ArrayList();
+	public List<PanelData> paramPanels = new ArrayList<PanelData>();
 	private static boolean changingSize;
 
 	public PanelArrayParam(PanelParameterEdit parent) {
@@ -170,7 +170,7 @@ public class PanelArrayParam extends PanelData {
 	private String[] getSingleArray(String data) {
 		String newData = data.substring(1, data.length() - 1);
 
-		HashMap<Integer, String> arrayIndexes = new HashMap();
+		HashMap<Integer, String> arrayIndexes = new HashMap<Integer, String>();
 		boolean changedSomething = true;
 		while (changedSomething) {
 			changedSomething = false;
@@ -211,7 +211,7 @@ public class PanelArrayParam extends PanelData {
 				}
 		}
 
-		List<String> paramList = new ArrayList(Arrays.asList(newData.split(",")));
+		List<String> paramList = new ArrayList<String>(Arrays.asList(newData.split(",")));
 		for (int i = 0; i < paramList.size(); i++) {
 			paramList.set(i, paramList.get(i).trim());
 			boolean changed = true;
@@ -234,7 +234,7 @@ public class PanelArrayParam extends PanelData {
 	private String[][] getDoubleArray(String data) {
 		String newData = data.substring(1, data.length() - 1);
 		String[] array = newData.split(Pattern.quote("], ["));
-		List<String[]> listArrays = new ArrayList();
+		List<String[]> listArrays = new ArrayList<String[]>();
 		for (int i = 0; i < array.length; i++) {
 			if (i > 0)
 				array[i] = "[" + array[i];

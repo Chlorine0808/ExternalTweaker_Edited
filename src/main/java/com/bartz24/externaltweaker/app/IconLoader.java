@@ -38,7 +38,7 @@ public class IconLoader {
             candidates.add(name.replace(":", "_") + ".png");
         }
 
-        String cleanId = id.replace("<", "").replace(">", "");
+        String cleanId = Utils.unformatItemId(id);
         String[] parts = cleanId.split(":");
         if (parts.length >= 2) {
             String modid = parts[0];
@@ -56,15 +56,22 @@ public class IconLoader {
         ImageIcon icon = null;
         for (String filename : candidates) {
             File f = new File(iconDir, filename);
+            // System.out.println("Checking icon: " + f.getAbsolutePath());
             if (f.exists()) {
                 try {
                     java.awt.image.BufferedImage img = ImageIO.read(f);
                     Image scaled = img.getScaledInstance(size, size, Image.SCALE_SMOOTH);
                     icon = new ImageIcon(scaled);
+                    System.out.println("Icon loaded: " + f.getName() + " for " + id);
                     break;
                 } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
+        }
+
+        if (icon == null) {
+            System.out.println("Icon NOT found for: " + id + " (Clean: " + cleanId + ")");
         }
 
         iconCache.put(cacheKey, icon);

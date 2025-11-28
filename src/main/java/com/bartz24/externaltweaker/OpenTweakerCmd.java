@@ -1,5 +1,3 @@
-package com.bartz24.externaltweaker;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -10,18 +8,16 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 import com.bartz24.externaltweaker.app.AppFrame;
+import com.bartz24.externaltweaker.app.Utils;
 import com.google.common.base.Strings;
 
-import crafttweaker.mc1120.item.MCItemStack;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
-import net.minecraft.command.ICommand;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fluids.Fluid;
@@ -29,7 +25,7 @@ import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.oredict.OreDictionary;
 
-public class OpenTweakerCmd extends CommandBase implements ICommand {
+public class OpenTweakerCmd extends CommandBase {
 	private List<String> aliases;
 
 	public OpenTweakerCmd() {
@@ -44,11 +40,11 @@ public class OpenTweakerCmd extends CommandBase implements ICommand {
 
 	public List<String> getTabCompletions(MinecraftServer server, ICommandSender sender, String[] args,
 			@Nullable BlockPos targetPos) {
-		return Collections.<String> emptyList();
+		return Collections.<String>emptyList();
 	}
 
 	public List addTabCompletionOptions(ICommandSender p_71516_1_, String[] p_71516_2_) {
-		return Collections.<String> emptyList();
+		return Collections.<String>emptyList();
 	}
 
 	@Override
@@ -59,18 +55,22 @@ public class OpenTweakerCmd extends CommandBase implements ICommand {
 
 	public Object[][] getItemList() {
 
-		NonNullList<ItemStack> stacks = NonNullList.create();
+		List<ItemStack> stacks = new ArrayList<ItemStack>();
 
-		for (ResourceLocation name : Item.REGISTRY.getKeys()) {
-			Item item = (Item) Item.REGISTRY.getObject(name);
+		for (Object obj : Item.itemRegistry) {
+			Item item = (Item) obj;
 			if (item != null) {
-				item.getSubItems(CreativeTabs.SEARCH, stacks);
+				item.getSubItems(item, CreativeTabs.tabAllSearch, stacks);
 			}
 		}
 		HashMap stackMappings = new HashMap();
 		for (ItemStack s : stacks) {
-			if (!s.isEmpty())
-				stackMappings.put(new MCItemStack(s).toString(), new MCItemStack(s).getDisplayName());
+			if (s != null && s.getItem() != null) {
+				String id = Item.itemRegistry.getNameForObject(s.getItem());
+				int meta = s.getItemDamage();
+				String formatted = "<" + id + ":" + meta + ">";
+				stackMappings.put(formatted, s.getDisplayName());
+			}
 		}
 
 		Object[][] array = new Object[stackMappings.size()][2];
@@ -141,5 +141,21 @@ public class OpenTweakerCmd extends CommandBase implements ICommand {
 	@Override
 	public String getUsage(ICommandSender sender) {
 		return null;
+	}
+
+	public String getCommandName() {
+		return getName();
+	}
+
+	public String getCommandUsage(ICommandSender sender) {
+		return null;
+	}
+
+	public void processCommand(ICommandSender sender, String[] args) {
+		try {
+			execute(null, sender, args);
+		} catch (CommandException e) {
+			e.printStackTrace();
+		}
 	}
 }
