@@ -12,12 +12,11 @@ public class ETScript {
 		this.fileName = fileName;
 		this.filePath = filePath;
 	}
-	
-	public ETScript clone()
-	{
+
+	public ETScript clone() {
 		ETScript s = new ETScript("", "");
-		s.fileName=fileName;
-		s.filePath=filePath;
+		s.fileName = fileName;
+		s.filePath = filePath;
 		s.recipes.addAll(recipes);
 		return s;
 	}

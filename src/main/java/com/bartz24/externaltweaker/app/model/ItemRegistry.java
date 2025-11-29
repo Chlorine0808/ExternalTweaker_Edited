@@ -61,4 +61,14 @@ public class ItemRegistry {
             }
         }
     }
+
+    public Object[][] toLegacyArray() {
+        Object[][] data = new Object[items.size()][2];
+        for (int i = 0; i < items.size(); i++) {
+            ItemData item = items.get(i);
+            data[i][0] = item.getId();
+            data[i][1] = item.getName();
+        }
+        return data;
+    }
 }

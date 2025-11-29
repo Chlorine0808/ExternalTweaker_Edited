@@ -13,12 +13,10 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -72,14 +70,14 @@ import com.bartz24.externaltweaker.app.panels.PanelParameterEdit;
 import com.bartz24.externaltweaker.app.panels.PanelCraftingRecipe;
 import com.bartz24.externaltweaker.app.recipe.RecipeHandler;
 import com.bartz24.externaltweaker.app.recipe.ShapedCraftingHandler;
+import com.bartz24.externaltweaker.app.service.DataService;
 import com.bartz24.externaltweaker.app.controller.AppController;
 
 public class AppFrame extends JFrame {
 	Object[][] itemMappings;
 	Object[][] fluidMappings;
 	Object[][] oreDictMappings;
-	public java.util.Map<String, List<String>> itemToOreDict = new HashMap<>();
-	public java.util.Map<String, List<String>> oreDictToItems = new HashMap<>();
+
 	public JTable table;
 	public List<String> blacklist = new ArrayList<>();
 	public JScrollPane tableScroll;
@@ -122,6 +120,7 @@ public class AppFrame extends JFrame {
 	public JCheckBox chkVisualEditor;
 	public IconLoader iconLoader;
 	public AppController controller;
+	public DataService dataService = new DataService();
 
 	public File iconDir;
 
@@ -136,6 +135,12 @@ public class AppFrame extends JFrame {
 		this.itemMappings = itemMappings;
 		this.fluidMappings = fluidMappings;
 		this.oreDictMappings = oreDictMappings;
+
+		// Populate Registries for Utils usage
+		com.bartz24.externaltweaker.app.model.ItemRegistry.getInstance().loadFromLegacyArray(itemMappings);
+		com.bartz24.externaltweaker.app.model.FluidRegistry.getInstance().loadFromLegacyArray(fluidMappings);
+		com.bartz24.externaltweaker.app.model.OreDictRegistry.getInstance().loadFromLegacyArray(oreDictMappings);
+
 		this.setPreferredSize(new Dimension(1200, 800));
 
 		loadBlacklist();
@@ -207,7 +212,7 @@ public class AppFrame extends JFrame {
 						// OreDict handling
 						String rawId = Utils.unformatItemId(id);
 						if (rawId.startsWith("ore:")) {
-							String rep = getOreDictRepresentativeItem(rawId);
+							String rep = Utils.getOreDictRepresentativeItem(rawId);
 							if (rep != null) {
 								iconItem = rep;
 							}
@@ -219,7 +224,7 @@ public class AppFrame extends JFrame {
 						// (which might be the OreDict name)
 						String iconName = name;
 						if (!iconItem.equals(id)) {
-							String resolvedName = getNameFromId(iconItem);
+							String resolvedName = Utils.getNameFromId(iconItem);
 							if (resolvedName != null && !resolvedName.isEmpty()) {
 								iconName = resolvedName;
 							}
@@ -923,7 +928,7 @@ public class AppFrame extends JFrame {
 
 		List<Integer> indexesValid = new ArrayList<Integer>();
 		for (int i = 0; i < array.length; i++) {
-			String cleanName = stripFormatting(array[i][1].toString());
+			String cleanName = Utils.stripFormatting(array[i][1].toString());
 
 			boolean blacklisted = false;
 			for (String s : blacklist) {
@@ -947,7 +952,7 @@ public class AppFrame extends JFrame {
 		Object[][] newArray = new Object[indexesValid.size()][2];
 		for (int i = 0; i < indexesValid.size(); i++) {
 			newArray[i][0] = array[indexesValid.get(i)][0];
-			newArray[i][1] = stripFormatting(array[indexesValid.get(i)][1].toString());
+			newArray[i][1] = Utils.stripFormatting(array[indexesValid.get(i)][1].toString());
 		}
 		array = newArray;
 
@@ -1099,7 +1104,7 @@ public class AppFrame extends JFrame {
 					}
 
 					if (rep == null)
-						rep = getOreDictRepresentativeItem(rawId);
+						rep = Utils.getOreDictRepresentativeItem(rawId);
 
 					if (rep != null) {
 						iconItem = rep;
@@ -1112,7 +1117,7 @@ public class AppFrame extends JFrame {
 				// (which might be the OreDict name)
 				String iconName = name;
 				if (!iconItem.equals(id)) {
-					String resolvedName = getNameFromId(iconItem);
+					String resolvedName = Utils.getNameFromId(iconItem);
 					if (resolvedName != null && !resolvedName.isEmpty()) {
 						iconName = resolvedName;
 					}
@@ -1124,62 +1129,6 @@ public class AppFrame extends JFrame {
 			return label;
 		}
 
-	}
-
-	public String getNameFromId(String id) {
-		String name = null;
-		String unformattedId = Utils.unformatItemId(id);
-
-		// System.out.println("getNameFromId: Looking up " + id + " (Unformatted: " +
-		// unformattedId + ")");
-
-		if (itemMappings != null) {
-			for (Object[] mapping : itemMappings) {
-				String mapId = (String) mapping[0];
-				if (mapId.equals(id) || Utils.unformatItemId(mapId).equals(unformattedId)) {
-					name = (String) mapping[1];
-					// System.out.println(" Found in itemMappings: " + name);
-					break;
-				}
-			}
-		}
-		if (name == null && fluidMappings != null) {
-			for (Object[] mapping : fluidMappings) {
-				String mapId = (String) mapping[0];
-				if (mapId.equals(id) || Utils.unformatItemId(mapId).equals(unformattedId)) {
-					name = (String) mapping[1];
-					// System.out.println(" Found in fluidMappings: " + name);
-					break;
-				}
-			}
-		}
-		if (name == null && oreDictMappings != null) {
-			for (Object[] mapping : oreDictMappings) {
-				String mapId = (String) mapping[0];
-				if (mapId.equals(id) || Utils.unformatItemId(mapId).equals(unformattedId)) {
-					name = (String) mapping[1];
-					// System.out.println(" Found in oreDictMappings: " + name);
-					break;
-				}
-			}
-		}
-		if (!unformattedId.equals(id)) {
-			// ... existing comments ...
-		}
-
-		if (name == null) {
-			System.out.println("getNameFromId: FAILED to find name for " + id);
-		} else {
-			// System.out.println("getNameFromId: Resolved " + id + " -> " + name);
-		}
-
-		return stripFormatting(name);
-	}
-
-	public String stripFormatting(String input) {
-		if (input == null)
-			return null;
-		return input.replaceAll("(?i)\\u00A7[0-9A-FK-OR]", "");
 	}
 
 	private void exportData() {
@@ -1197,25 +1146,13 @@ public class AppFrame extends JFrame {
 		}
 		if (input != 0)
 			return;
-		boolean fileExists = new File(dataPanel.txtPath.getText().trim()).isFile();
-		try {
 
+		try {
+			File file = new File(dataPanel.txtPath.getText().trim());
 			if (settings[4]) {
-				FileOutputStream file = new FileOutputStream(dataPanel.txtPath.getText().trim());
-				ObjectOutputStream save = new ObjectOutputStream(file);
-				exportOverride(settings, save);
-				save.close();
+				dataService.saveData(file, recipeData, settings);
 			} else {
-				if (fileExists) {
-					FileInputStream curFile = new FileInputStream(dataPanel.txtPath.getText().trim());
-					ObjectInputStream cur = new ObjectInputStream(curFile);
-					exportAdd(settings, dataPanel.txtPath.getText().trim(), cur);
-				} else {
-					FileOutputStream file = new FileOutputStream(dataPanel.txtPath.getText().trim());
-					ObjectOutputStream save = new ObjectOutputStream(file);
-					exportOverride(settings, save);
-					save.close();
-				}
+				dataService.mergeAndSaveData(file, recipeData, settings);
 			}
 
 		} catch (Exception exc) {
@@ -1226,106 +1163,6 @@ public class AppFrame extends JFrame {
 		}
 		JOptionPane.showOptionDialog(this, "Export Finished!", "Done", JOptionPane.OK_OPTION, JOptionPane.PLAIN_MESSAGE,
 				null, new Object[] { "OK" }, "OK");
-	}
-
-	private void exportOverride(boolean[] settings, ObjectOutputStream save) throws IOException {
-		if (settings[1] && itemMappings != null)
-			save.writeObject(itemMappings);
-		else
-			save.writeObject(new Object[0][0]);
-
-		if (settings[2] && fluidMappings != null)
-			save.writeObject(fluidMappings);
-		else
-			save.writeObject(new Object[0][0]);
-		if (settings[3] && oreDictMappings != null)
-			save.writeObject(oreDictMappings);
-		else
-			save.writeObject(new Object[0][0]);
-		if (settings[0] && recipeData != null)
-			save.writeObject(recipeData);
-		else
-			save.writeObject(new ArrayList());
-	}
-
-	private void exportAdd(boolean[] settings, String savePath, ObjectInputStream cur)
-			throws IOException, ClassNotFoundException {
-		List<Object[]> iMap = new ArrayList<Object[]>(Arrays.asList((Object[][]) cur.readObject()));
-		List<Object[]> fMap = new ArrayList<Object[]>(Arrays.asList((Object[][]) cur.readObject()));
-		List<Object[]> oMap = new ArrayList<Object[]>(Arrays.asList((Object[][]) cur.readObject()));
-		List<ETRecipeData> rList = (ArrayList<ETRecipeData>) cur.readObject();
-		cur.close();
-		FileOutputStream file = new FileOutputStream(savePath);
-		ObjectOutputStream save = new ObjectOutputStream(file);
-		if (settings[1]) {
-			for (int i = 0; i < itemMappings.length; i++) {
-				boolean contains = false;
-				for (int i2 = 0; i2 < iMap.size(); i2++) {
-					if (itemMappings[i][0].equals(iMap.get(i2)[0])) {
-						contains = true;
-						break;
-					}
-				}
-				if (!contains)
-					iMap.add(itemMappings[i]);
-			}
-			save.writeObject(iMap.toArray(new Object[iMap.size()][2]));
-		} else {
-			save.writeObject(iMap.toArray(new Object[iMap.size()][2]));
-		}
-		if (settings[2]) {
-			for (int i = 0; i < fluidMappings.length; i++) {
-				boolean contains = false;
-				for (int i2 = 0; i2 < fMap.size(); i2++) {
-					if (fluidMappings[i][0].equals(fMap.get(i2)[0])) {
-						contains = true;
-						break;
-					}
-				}
-				if (!contains)
-					fMap.add(fluidMappings[i]);
-			}
-			save.writeObject(fMap.toArray(new Object[fMap.size()][2]));
-		} else {
-			save.writeObject(fMap.toArray(new Object[fMap.size()][2]));
-		}
-		if (settings[3]) {
-			for (int i = 0; i < oreDictMappings.length; i++) {
-				boolean contains = false;
-				for (int i2 = 0; i2 < oMap.size(); i2++) {
-					if (oreDictMappings[i][0].equals(oMap.get(i2)[0])) {
-						contains = true;
-						break;
-					}
-				}
-				if (!contains)
-					oMap.add(oreDictMappings[i]);
-			}
-			save.writeObject(oMap.toArray(new Object[oMap.size()][2]));
-		} else {
-			save.writeObject(oMap.toArray(new Object[oMap.size()][2]));
-		}
-		if (settings[0]) {
-			for (int i = 0; i < recipeData.size(); i++) {
-				boolean contains = false;
-				for (int i2 = 0; i2 < rList.size(); i2++) {
-					if (rList.get(i2).getRecipeFormat().equals(recipeData.get(i).getRecipeFormat())) {
-						contains = true;
-						for (int x = 0; x < rList.get(i2).getParameterTypes().length; x++) {
-							if ((rList.get(i2).getParamName(x) == null || rList.get(i2).getParamName(x).isEmpty()))
-								rList.get(i2).setParamName(x, recipeData.get(i).getParamName(x));
-						}
-						break;
-					}
-				}
-				if (!contains)
-					rList.add(recipeData.get(i));
-			}
-			save.writeObject(rList);
-		} else {
-			save.writeObject(rList);
-		}
-		save.close();
 	}
 
 	private void importData() {
@@ -1581,107 +1418,10 @@ public class AppFrame extends JFrame {
 		}
 
 		System.out.println("Loading OreDict CSV: " + file.getAbsolutePath());
-		int count = 0;
-		try (BufferedReader br = new BufferedReader(new FileReader(file))) {
-			String line;
-			boolean first = true;
-			while ((line = br.readLine()) != null) {
-				if (first) {
-					first = false;
-					continue;
-				}
-				// Ore Name,ItemStack,Item ID,Display Name,Wildcard
-				String[] parts = line.split(",");
-				if (parts.length < 4) {
-					System.out.println("Invalid line: " + line);
-					continue;
-				}
-				String oreName = parts[0].trim();
-				String itemMeta = parts[1].contains("@") ? parts[1].split("@")[1] : "0";
-				// IDにメタデータを付与し、さらに<>で囲む (例: <minecraft:wool:1>)
-				String rawItemId = parts[2].trim() + (itemMeta.equals("0") ? "" : ":" + itemMeta);
-				String itemId = Utils.formatItemId(rawItemId);
+		com.bartz24.externaltweaker.app.model.OreDictRegistry.getInstance().loadFromCsv(file);
+		this.oreDictMappings = com.bartz24.externaltweaker.app.model.OreDictRegistry.getInstance().toLegacyArray();
 
-				// Item ID -> OreDict Nameのリストへのマッピング (順方向)
-				// まだキーが存在しなければリストを作成
-				if (!itemToOreDict.containsKey(itemId)) {
-					itemToOreDict.put(itemId, new ArrayList<>());
-				}
-				// リストにOreDict名が含まれていなければ追加
-				if (!itemToOreDict.get(itemId).contains(oreName)) {
-					itemToOreDict.get(itemId).add(oreName);
-				}
-
-				// OreDict Name -> Item IDのリストへのマッピング (逆方向)
-				String oreDictKey = Utils.formatItemId("ore:" + oreName);
-				// まだキーが存在しなければリストを作成
-				if (!oreDictToItems.containsKey(oreDictKey)) {
-					oreDictToItems.put(oreDictKey, new ArrayList<>());
-					if (count < 5)
-						System.out.println("Loaded OreDict Key: " + oreDictKey + " -> " + itemId);
-				}
-				// リストにItem IDが含まれていなければ追加
-				if (!oreDictToItems.get(oreDictKey).contains(itemId)) {
-					oreDictToItems.get(oreDictKey).add(itemId);
-				}
-				count++;
-			}
-
-			// Update oreDictMappings for the table
-			List<Object[]> newOreDictMappings = new ArrayList<>();
-			for (String key : oreDictToItems.keySet()) {
-				// Filter out empty OreDicts
-				if (oreDictToItems.get(key).isEmpty())
-					continue;
-
-				// Column 0: ID (<ore:name>), Column 1: Name (oreName), Column 2: Representative
-				// Item
-				String name = key.replace("<ore:", "").replace(">", "");
-				String repItem = Utils.formatItemId(oreDictToItems.get(key).get(0));
-				newOreDictMappings.add(new Object[] { key, name, repItem });
-			}
-			oreDictMappings = newOreDictMappings.toArray(new Object[0][0]);
-
-			System.out.println("Loaded " + count + " OreDict entries. Map size: " + oreDictToItems.size());
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+		System.out.println("Loaded OreDict entries via Registry.");
 	}
 
-	public List<String> getOreDicts(String itemId) {
-		// modID:itemID:metaが所属するoreDictを返す
-		if (itemId == null)
-			return Collections.emptyList();
-
-		// Ensure angle brackets are present
-		itemId = Utils.formatItemId(itemId);
-		// System.out.println("getOreDicts looking up: " + itemId);
-
-		if (itemToOreDict.containsKey(itemId)) {
-			// System.out.println("Found exact match: " + itemToOreDict.get(itemId));
-			return itemToOreDict.get(itemId);
-		}
-		// System.out.println("No OreDict found for: " + itemId);
-		return Collections.emptyList();
-	}
-
-	public String getOreDictRepresentativeItem(String oreName) {
-		if (oreName == null)
-			return null;
-
-		// Ensure lookup key is formatted as <ore:name>
-		String lookupKey = Utils.formatItemId(oreName);
-
-		if (oreDictToItems.containsKey(lookupKey)) {
-			List<String> items = oreDictToItems.get(lookupKey);
-			if (!items.isEmpty()) {
-				// Items stored in map should already have brackets
-				return Utils.formatItemId(items.get(0));
-			}
-		} else {
-			// System.out.println("getOreDictRepresentativeItem: Key not found: " +
-			// lookupKey);
-		}
-		return null;
-	}
 }

@@ -98,9 +98,24 @@ public class OreDictRegistry {
                     continue;
 
                 String oreNameFull = parts[0].trim(); // ore:logWood
-                String itemId = Utils.formatItemId(parts[2].trim()); // minecraft:log
+                String itemStack = parts[1].trim(); // 1xtile.log@0 or 1xtile.log@*
+                String itemIdRaw = parts[2].trim(); // minecraft:log
 
-                String oreName = oreNameFull.replace("ore:", "").replace(">", "");
+                String meta = "0";
+                if (itemStack.contains("@")) {
+                    meta = itemStack.substring(itemStack.lastIndexOf("@") + 1);
+                }
+
+                String itemId = itemIdRaw;
+                if (meta.equals("*") || meta.equals("32767")) {
+                    itemId += ":*";
+                } else if (!meta.equals("0")) {
+                    itemId += ":" + meta;
+                }
+
+                itemId = Utils.formatItemId(itemId);
+
+                String oreName = oreNameFull.replace("ore:", "").replace("<", "").replace(">", "");
 
                 OreDictData data = oreDictMap.get(oreName);
                 if (data == null) {
@@ -115,5 +130,17 @@ public class OreDictRegistry {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public Object[][] toLegacyArray() {
+        List<OreDictData> all = getAllOreDicts();
+        Object[][] data = new Object[all.size()][3];
+        for (int i = 0; i < all.size(); i++) {
+            OreDictData od = all.get(i);
+            data[i][0] = Utils.formatItemId("ore:" + od.getName());
+            data[i][1] = od.getName();
+            data[i][2] = od.getRepresentativeItem();
+        }
+        return data;
     }
 }

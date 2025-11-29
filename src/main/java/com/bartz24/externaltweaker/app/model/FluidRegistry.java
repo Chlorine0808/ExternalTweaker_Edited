@@ -52,4 +52,14 @@ public class FluidRegistry {
             }
         }
     }
+
+    public Object[][] toLegacyArray() {
+        Object[][] data = new Object[fluids.size()][2];
+        for (int i = 0; i < fluids.size(); i++) {
+            FluidData fluid = fluids.get(i);
+            data[i][0] = fluid.getName();
+            data[i][1] = fluid.getDisplayName();
+        }
+        return data;
+    }
 }

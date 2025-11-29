@@ -295,7 +295,7 @@ public class PanelCraftingRecipe extends JPanel {
                     if (btn == outputButton) {
                         String rawData = Utils.unformatItemId(data);
                         if (rawData.startsWith("ore:")) {
-                            String rep = mainFrame.getOreDictRepresentativeItem(rawData);
+                            String rep = Utils.getOreDictRepresentativeItem(rawData);
                             if (rep != null) {
                                 data = rep;
                             }
@@ -333,7 +333,8 @@ public class PanelCraftingRecipe extends JPanel {
 
                                     if (chkUseOreDict.isSelected()) {
                                         System.out.println("Checking OreDict for: " + data);
-                                        java.util.List<String> ores = mainFrame.getOreDicts(data);
+                                        java.util.List<String> ores = com.bartz24.externaltweaker.app.model.OreDictRegistry
+                                                .getInstance().getOreDictsForItem(data);
                                         if (!ores.isEmpty()) {
                                             data = Utils.formatItemId("ore:" + ores.get(0));
                                             System.out.println("Converted to OreDict: " + data);
@@ -479,7 +480,8 @@ public class PanelCraftingRecipe extends JPanel {
             String original = originalGridItems[y][x];
             boolean restored = false;
             if (original != null && !original.equals("null")) {
-                java.util.List<String> ores = mainFrame.getOreDicts(original);
+                java.util.List<String> ores = com.bartz24.externaltweaker.app.model.OreDictRegistry
+                        .getInstance().getOreDictsForItem(original);
                 for (String ore : ores) {
                     if (Utils.formatItemId("ore:" + ore).equals(Utils.formatItemId(current))) {
                         baseItem = original;
@@ -490,7 +492,7 @@ public class PanelCraftingRecipe extends JPanel {
             }
 
             if (!restored) {
-                String rep = mainFrame.getOreDictRepresentativeItem(current);
+                String rep = Utils.getOreDictRepresentativeItem(current);
                 if (rep != null) {
                     baseItem = rep;
                 }
@@ -500,7 +502,8 @@ public class PanelCraftingRecipe extends JPanel {
         System.out.println("Cycling item. Current: " + current + ", Base: " + baseItem);
 
         // 2. Get all OreDicts for the base item
-        java.util.List<String> ores = mainFrame.getOreDicts(baseItem);
+        java.util.List<String> ores = com.bartz24.externaltweaker.app.model.OreDictRegistry.getInstance()
+                .getOreDictsForItem(baseItem);
 
         // 3. Create options list: [BaseItem, <ore:Dict1>, <ore:Dict2>, ...]
         java.util.List<String> options = new java.util.ArrayList<>();
@@ -615,7 +618,7 @@ public class PanelCraftingRecipe extends JPanel {
             return;
         }
 
-        String name = mainFrame.getNameFromId(item);
+        String name = Utils.getNameFromId(item);
         System.out.println("updateButtonDisplay: item=" + item + ", name=" + name);
         if (name == null || name.isEmpty()) {
             name = item;
@@ -634,7 +637,7 @@ public class PanelCraftingRecipe extends JPanel {
             if (iconOverride != null) {
                 iconItem = iconOverride;
             } else if (Utils.unformatItemId(item).startsWith("ore:")) {
-                String rep = mainFrame.getOreDictRepresentativeItem(item);
+                String rep = Utils.getOreDictRepresentativeItem(item);
                 if (rep != null)
                     iconItem = rep;
             }
@@ -645,7 +648,7 @@ public class PanelCraftingRecipe extends JPanel {
             // (which might be the OreDict name)
             String iconName = name;
             if (!iconItem.equals(item)) {
-                String resolvedName = mainFrame.getNameFromId(iconItem);
+                String resolvedName = Utils.getNameFromId(iconItem);
                 if (resolvedName != null && !resolvedName.isEmpty()) {
                     iconName = resolvedName;
                 }
