@@ -16,36 +16,35 @@ import com.bartz24.externaltweaker.app.Strings;
 public class PanelBooleanParam extends PanelData {
 	private final ButtonGroup buttonGroup = new ButtonGroup();
 	private JRadioButton btnTrue;
-private JRadioButton btnFalse;
+	private JRadioButton btnFalse;
 
 	public PanelBooleanParam(PanelParameterEdit parent) {
 		super(parent);
-		
+
 		btnTrue = new JRadioButton("True");
 		buttonGroup.add(btnTrue);
 		btnTrue.setHorizontalAlignment(SwingConstants.RIGHT);
-		
+
 		btnFalse = new JRadioButton("False");
 		buttonGroup.add(btnFalse);
 		btnFalse.setHorizontalAlignment(SwingConstants.LEFT);
 		GroupLayout groupLayout_2 = new GroupLayout(this);
 		groupLayout_2.setHorizontalGroup(
-			groupLayout_2.createParallelGroup(Alignment.TRAILING)
-				.addGroup(groupLayout_2.createSequentialGroup()
-					.addGap(177)
-					.addComponent(btnTrue, GroupLayout.DEFAULT_SIZE, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-					.addPreferredGap(ComponentPlacement.UNRELATED)
-					.addComponent(btnFalse, GroupLayout.DEFAULT_SIZE, 51, Short.MAX_VALUE)
-					.addGap(173))
-		);
+				groupLayout_2.createParallelGroup(Alignment.TRAILING)
+						.addGroup(groupLayout_2.createSequentialGroup()
+								.addGap(177)
+								.addComponent(btnTrue, GroupLayout.DEFAULT_SIZE, GroupLayout.DEFAULT_SIZE,
+										Short.MAX_VALUE)
+								.addPreferredGap(ComponentPlacement.UNRELATED)
+								.addComponent(btnFalse, GroupLayout.DEFAULT_SIZE, 51, Short.MAX_VALUE)
+								.addGap(173)));
 		groupLayout_2.setVerticalGroup(
-			groupLayout_2.createParallelGroup(Alignment.LEADING)
-				.addGroup(groupLayout_2.createSequentialGroup()
-					.addGroup(groupLayout_2.createParallelGroup(Alignment.BASELINE)
-						.addComponent(btnTrue)
-						.addComponent(btnFalse))
-					.addContainerGap(277, Short.MAX_VALUE))
-		);
+				groupLayout_2.createParallelGroup(Alignment.LEADING)
+						.addGroup(groupLayout_2.createSequentialGroup()
+								.addGroup(groupLayout_2.createParallelGroup(Alignment.BASELINE)
+										.addComponent(btnTrue)
+										.addComponent(btnFalse))
+								.addContainerGap(277, Short.MAX_VALUE)));
 		this.setLayout(groupLayout_2);
 	}
 

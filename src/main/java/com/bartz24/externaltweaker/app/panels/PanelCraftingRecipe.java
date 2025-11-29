@@ -340,6 +340,9 @@ public class PanelCraftingRecipe extends JPanel {
                                         }
                                     }
                                     setGridItem(x, y, data);
+                                    selectedX = x;
+                                    selectedY = y;
+                                    updateSelectionDisplay();
                                     saveToRecipe();
                                     return true;
                                 }
@@ -461,6 +464,8 @@ public class PanelCraftingRecipe extends JPanel {
                                 .addContainerGap()));
     }
 
+    private String[][] originalGridItems = new String[3][3];
+
     private void cycleItem(int x, int y, boolean next) {
         String current = gridData[y][x];
         if (current == null || current.equals("null"))
@@ -470,9 +475,25 @@ public class PanelCraftingRecipe extends JPanel {
         String baseItem = current;
         String rawCurrent = Utils.unformatItemId(current);
         if (rawCurrent.startsWith("ore:")) {
-            String rep = mainFrame.getOreDictRepresentativeItem(current);
-            if (rep != null) {
-                baseItem = rep;
+            // Try to restore original item if it matches this OreDict
+            String original = originalGridItems[y][x];
+            boolean restored = false;
+            if (original != null && !original.equals("null")) {
+                java.util.List<String> ores = mainFrame.getOreDicts(original);
+                for (String ore : ores) {
+                    if (Utils.formatItemId("ore:" + ore).equals(Utils.formatItemId(current))) {
+                        baseItem = original;
+                        restored = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!restored) {
+                String rep = mainFrame.getOreDictRepresentativeItem(current);
+                if (rep != null) {
+                    baseItem = rep;
+                }
             }
         }
 
@@ -559,7 +580,13 @@ public class PanelCraftingRecipe extends JPanel {
     }
 
     public void setGridItem(int x, int y, String item, String iconOverride) {
-        gridData[y][x] = Utils.formatItemId(item);
+        String formatted = Utils.formatItemId(item);
+        gridData[y][x] = formatted;
+
+        if (item != null && !item.equals("null") && !Utils.unformatItemId(item).startsWith("ore:")) {
+            originalGridItems[y][x] = formatted;
+        }
+
         updateButtonDisplay(gridButtons[y][x], item, 64, iconOverride);
     }
 

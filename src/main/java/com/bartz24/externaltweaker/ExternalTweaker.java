@@ -95,7 +95,7 @@ public class ExternalTweaker {
 				return true;
 			}
 		}
-		if(name.startsWith("mods.contenttweaker"))
+		if (name.startsWith("mods.contenttweaker"))
 			return true;
 		return false;
 	}

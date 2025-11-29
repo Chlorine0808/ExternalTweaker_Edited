@@ -987,11 +987,11 @@ public class AppFrame extends JFrame {
 				} catch (Exception e) {
 				}
 
-				int modCompare = mod1.compareTo(mod2);
+				int modCompare = mod1.compareToIgnoreCase(mod2);
 				if (modCompare != 0)
 					return modCompare;
 
-				int nameCompare = name1.compareTo(name2);
+				int nameCompare = name1.compareToIgnoreCase(name2);
 				if (nameCompare != 0)
 					return nameCompare;
 
