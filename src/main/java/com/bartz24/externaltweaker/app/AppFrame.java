@@ -1,11 +1,8 @@
 package com.bartz24.externaltweaker.app;
 
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Desktop;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
@@ -22,15 +19,12 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-
 import javax.swing.AbstractButton;
 import javax.swing.ImageIcon;
 import javax.swing.BoxLayout;
@@ -78,6 +72,7 @@ import com.bartz24.externaltweaker.app.panels.PanelParameterEdit;
 import com.bartz24.externaltweaker.app.panels.PanelCraftingRecipe;
 import com.bartz24.externaltweaker.app.recipe.RecipeHandler;
 import com.bartz24.externaltweaker.app.recipe.ShapedCraftingHandler;
+import com.bartz24.externaltweaker.app.controller.AppController;
 
 public class AppFrame extends JFrame {
 	Object[][] itemMappings;
@@ -126,6 +121,7 @@ public class AppFrame extends JFrame {
 	private JMenuItem mntmRenameCurrentScript;
 	public JCheckBox chkVisualEditor;
 	public IconLoader iconLoader;
+	public AppController controller;
 
 	public File iconDir;
 
@@ -133,6 +129,8 @@ public class AppFrame extends JFrame {
 			List<String> methods, File iconDir, File oredictCsv) {
 		this.iconDir = iconDir;
 		this.iconLoader = new IconLoader(iconDir);
+		this.controller = new AppController();
+		this.controller.setView(this);
 		setTitle("External Tweaker");
 		// setIconImage(Toolkit.getDefaultToolkit().getImage(AppFrame.class.getResource("/book_writable.png")));
 		this.itemMappings = itemMappings;
@@ -597,7 +595,7 @@ public class AppFrame extends JFrame {
 
 		menuItemNew.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ev) {
-				newScript();
+				controller.newScript();
 			}
 		});
 
@@ -607,7 +605,7 @@ public class AppFrame extends JFrame {
 
 		menuItemOpen.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ev) {
-				openScripts();
+				controller.openScripts();
 			}
 		});
 
@@ -617,7 +615,7 @@ public class AppFrame extends JFrame {
 
 		menuItemSave.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ev) {
-				saveScript(getCurrentScript());
+				controller.saveScript(getCurrentScript());
 			}
 		});
 
@@ -639,7 +637,7 @@ public class AppFrame extends JFrame {
 
 		mntmSaveAllScripts.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ev) {
-				saveAllScripts();
+				controller.saveAllScripts();
 			}
 		});
 
@@ -649,7 +647,7 @@ public class AppFrame extends JFrame {
 
 		mntmDeleteScript.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ev) {
-				deleteScript();
+				controller.deleteScript();
 			}
 		});
 
@@ -680,7 +678,7 @@ public class AppFrame extends JFrame {
 		mnOther.add(mntmRenameCurrentScript);
 		mntmRenameCurrentScript.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ev) {
-				renameFile();
+				controller.renameFile();
 			}
 		});
 
@@ -716,7 +714,7 @@ public class AppFrame extends JFrame {
 
 		mntmHelp.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ev) {
-				help();
+				controller.help();
 			}
 		});
 
@@ -725,7 +723,7 @@ public class AppFrame extends JFrame {
 
 		mntmAbout.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ev) {
-				about();
+				controller.about();
 			}
 		});
 
@@ -734,7 +732,7 @@ public class AppFrame extends JFrame {
 
 		mntmDownload.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ev) {
-				download();
+				controller.download();
 			}
 		});
 
@@ -838,7 +836,7 @@ public class AppFrame extends JFrame {
 		}
 	}
 
-	private void updateCurrentRecipe() {
+	public void updateCurrentRecipe() {
 
 		pnlRecipeEdit.removeAll();
 		paramPanels.clear();
@@ -1184,43 +1182,6 @@ public class AppFrame extends JFrame {
 		return input.replaceAll("(?i)\\u00A7[0-9A-FK-OR]", "");
 	}
 
-	private void newScript() {
-		String fileName = JOptionPane.showInputDialog(this, "New script file name", "New Script.zs");
-		if ((fileName == null || fileName.isEmpty()))
-			return;
-		if (!fileName.trim().endsWith(".zs"))
-			fileName = fileName.trim() + ".zs";
-		scripts.add(new ETScript("", fileName));
-		updateScriptsList(false);
-		comboScripts.setSelectedIndex(scripts.size() - 1);
-		comboRecipes.setSelectedIndex(-1);
-		updateRecipesList(false);
-		comboRecipes.setSelectedIndex(-1);
-		updateCurrentRecipe();
-		btnNewRecipe.setEnabled(comboScripts.getSelectedIndex() >= 0 && listMethods.getModel().getSize() > 0);
-	}
-
-	private void deleteScript() {
-		if (scripts.size() > 0 && comboScripts.getSelectedIndex() >= 0) {
-			int dialogResult = JOptionPane.showConfirmDialog(this,
-					"Are you sure you want to delete this script? \n \n This will also delete the actual file!",
-					"Warning", JOptionPane.YES_NO_OPTION);
-			if (dialogResult == JOptionPane.YES_OPTION) {
-				if (!(getCurrentScript().filePath == null || getCurrentScript().filePath.isEmpty())) {
-					new File(getCurrentScript().filePath + File.separator + getCurrentScript().fileName).delete();
-				}
-				scripts.remove(comboScripts.getSelectedIndex());
-				comboScripts.setSelectedIndex(-1);
-				updateScriptsList(false);
-				comboScripts.setSelectedIndex(-1);
-				comboRecipes.setSelectedIndex(-1);
-				updateRecipesList(false);
-				comboRecipes.setSelectedIndex(-1);
-				updateCurrentRecipe();
-			}
-		}
-	}
-
 	private void exportData() {
 		PanelImportExportDialog dataPanel = new PanelImportExportDialog(false);
 		int input = JOptionPane.showOptionDialog(this, dataPanel, "Exporting Data", JOptionPane.OK_CANCEL_OPTION,
@@ -1504,290 +1465,6 @@ public class AppFrame extends JFrame {
 			save.readObject();
 	}
 
-	private void saveScript(ETScript script) {
-		if ((script.filePath == null || script.filePath.isEmpty())) {
-			java.awt.FileDialog fd = new java.awt.FileDialog(this, "Save Script", java.awt.FileDialog.SAVE);
-			fd.setDirectory(System.getProperty("user.dir"));
-			fd.setFile(script.fileName);
-			fd.setVisible(true);
-
-			if (fd.getFile() != null) {
-				script.filePath = fd.getDirectory();
-				script.fileName = fd.getFile();
-				if (!script.fileName.endsWith(".zs"))
-					script.fileName += ".zs";
-			} else {
-				return;
-			}
-		}
-
-		BufferedWriter writer = null;
-		try {
-
-			writer = new BufferedWriter(new FileWriter(new File(script.filePath + File.separator + script.fileName)));
-
-			writer.write("# CREATED USING EXTERNAL TWEAKER\n");
-
-			for (ETActualRecipe r : script.recipes) {
-				int index = indexOfRecipeFormat(r.getRecipeFormat());
-				if (index >= 0) {
-					if (!recipeData.get(index).isAddRecipe()) {
-						writer.write(r.recipeToString(recipeData.get(index)) + "\n");
-					}
-				}
-			}
-
-			writer.write("\n");
-
-			for (ETActualRecipe r : script.recipes) {
-				int index = indexOfRecipeFormat(r.getRecipeFormat());
-				if (index >= 0) {
-					if (recipeData.get(index).isAddRecipe()) {
-						writer.write(r.recipeToString(recipeData.get(index)) + "\n");
-					}
-				} else
-					writer.write(r.recipeToString(recipeData.get(index)) + "\n");
-
-			}
-
-			writer.close();
-
-			JOptionPane.showOptionDialog(this, "Script saved successfully!", "Saved", JOptionPane.OK_OPTION,
-					JOptionPane.PLAIN_MESSAGE,
-					null, new Object[] { "OK" }, "OK");
-
-		} catch (Exception e) {
-			e.printStackTrace();
-			JOptionPane.showOptionDialog(this, e.getLocalizedMessage(), "Error! Report this issue if you can!",
-					JOptionPane.OK_OPTION, JOptionPane.ERROR_MESSAGE, null, new Object[] { "OK" }, "OK");
-		}
-
-	}
-
-	private void openScripts() {
-		File[] files = null;
-		java.awt.FileDialog fd = new java.awt.FileDialog(this, "Open Scripts", java.awt.FileDialog.LOAD);
-		fd.setMultipleMode(true);
-		fd.setDirectory(System.getProperty("user.dir"));
-		fd.setVisible(true);
-		files = fd.getFiles();
-
-		if (files == null || files.length == 0)
-			return;
-
-		List<File> allScripts = new ArrayList<File>();
-		for (File f : files) {
-			allScripts.addAll(f.isDirectory() ? getScripts(f) : Collections.singletonList(f));
-		}
-		boolean ignoreErrors = false;
-		for (File f : allScripts) {
-			ETScript script = new ETScript(
-					f.getAbsolutePath().substring(0, f.getAbsolutePath().lastIndexOf(File.separator)),
-					f.getAbsolutePath().substring(f.getAbsolutePath().lastIndexOf(File.separator) + 1));
-
-			List<String> lines = new ArrayList<String>();
-			try (BufferedReader reader = new BufferedReader(new FileReader(f))) {
-				String line = null;
-				while ((line = reader.readLine()) != null) {
-					lines.add(line);
-				}
-				reader.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-				JOptionPane.showOptionDialog(this, e.getLocalizedMessage(), "Error! Report this issue if you can!",
-						JOptionPane.OK_OPTION, JOptionPane.ERROR_MESSAGE, null, new Object[] { "OK" }, "OK");
-			}
-			boolean skippingScript = false;
-			int lineNum = 0;
-			String lastLine = "";
-			HashMap<String, String> variables = new HashMap<String, String>();
-			for (String string : lines) {
-				try {
-					lineNum++;
-					if ((string != null && !string.isEmpty()) && !string.startsWith("#") && !string.startsWith("//")
-							&& !string.startsWith("/*") && !string.endsWith("*/")) {
-						if (!(lastLine + string).endsWith(";")) {
-							lastLine += string;
-							continue;
-						}
-						String s = lastLine + string;
-						lastLine = "";
-						if (s.startsWith("val ") && s.contains("=")) {
-							String[] variable = s.trim().substring(4, s.trim().length() - 1).split("=");
-							variables.put(variable[0].trim(), variable[1].trim());
-							continue;
-						}
-						ETRecipeData d = findRecipeDataForRecipe(s);
-						if (d != null) {
-							String params = s.substring(s.indexOf("(") + 1, s.lastIndexOf(")"));
-							HashMap<Integer, String> arrayIndexes = new HashMap<Integer, String>();
-							List<String> paramList = new ArrayList<String>();
-							boolean varGoThroughAgain = true;
-							while (varGoThroughAgain) {
-								varGoThroughAgain = false;
-								boolean changedSomething = true;
-								while (changedSomething) {
-									changedSomething = false;
-									while (params.contains(".withTag(") && params.contains(")")
-											&& params.indexOf(".withTag(") < params.indexOf(")")
-											&& !params.substring(params.indexOf(".withTag("), params.indexOf(")") + 1)
-													.contains(".onlyWithTag(")) {
-										String arg = params.substring(params.indexOf(".withTag("),
-												params.indexOf(")") + 1);
-										params = params.replace(arg, "~" + arrayIndexes.size() + "~");
-										arrayIndexes.put(arrayIndexes.size(), arg);
-										changedSomething = true;
-									}
-									if (!changedSomething)
-										while (params.contains("\"")
-												&& params.substring(params.indexOf("\"") + 1).contains("\"")) {
-											String arg = params.substring(params.indexOf("\""),
-													params.indexOf("\"", params.indexOf("\"") + 1) + 1);
-											params = params.replace(arg, "~" + arrayIndexes.size() + "~");
-											arrayIndexes.put(arrayIndexes.size(), arg);
-											changedSomething = true;
-										}
-									if (!changedSomething)
-										while (params.contains(".onlyWithTag(") && params.contains(")")
-												&& params.indexOf(".onlyWithTag(") < params.indexOf(")")) {
-											String arg = params.substring(params.indexOf(".onlyWithTag("),
-													params.indexOf(")") + 1);
-											params = params.replace(arg, "~" + arrayIndexes.size() + "~");
-											arrayIndexes.put(arrayIndexes.size(), arg);
-											changedSomething = true;
-										}
-									if (!changedSomething)
-										while (params.contains("<") && params.contains(">")
-												&& params.indexOf("<") < params.indexOf(">")) {
-											String arg = params.substring(params.indexOf("<"), params.indexOf(">") + 1);
-											params = params.replace(arg, "~" + arrayIndexes.size() + "~");
-											arrayIndexes.put(arrayIndexes.size(), arg);
-											changedSomething = true;
-										}
-									if (!changedSomething)
-										for (String var : variables.keySet()) {
-											while (params.contains(var)) {
-												varGoThroughAgain = true;
-												for (String var2 : variables.keySet()) {
-													String[] splitVar = variables.get(var).split("\\.");
-													if (!var.equals(var2) && splitVar.length > 1
-															&& splitVar[0].equals(var2)) {
-														splitVar[0] = variables.get(var2);
-														String arg = "";
-														for (int i = 0; i < splitVar.length; i++) {
-															arg += splitVar[i];
-															if (i < splitVar.length - 1)
-																arg += ".";
-														}
-														params = params.replace(var, arg);
-														changedSomething = true;
-													}
-												}
-												if (changedSomething)
-													break;
-												String arg = variables.get(var);
-												params = params.replace(var, "~" + arrayIndexes.size() + "~");
-												arrayIndexes.put(arrayIndexes.size(), arg);
-												changedSomething = true;
-											}
-											if (changedSomething)
-												break;
-										}
-									if (!changedSomething)
-										while (params.contains("[[") && params.contains("]]")
-												&& params.indexOf("[[") < params.indexOf("]]")) {
-											String arg = params.substring(params.indexOf("[["),
-													params.indexOf("]]") + 2);
-											params = params.replace(arg, "~" + arrayIndexes.size() + "~");
-											arrayIndexes.put(arrayIndexes.size(), arg);
-											changedSomething = true;
-
-										}
-									if (!changedSomething)
-										while (params.contains("[") && params.contains("]")
-												&& params.indexOf("[") < params.indexOf("]")) {
-											String arg = params.substring(params.indexOf("["), params.indexOf("]") + 1);
-											params = params.replace(arg, "~" + arrayIndexes.size() + "~");
-											arrayIndexes.put(arrayIndexes.size(), arg);
-											changedSomething = true;
-										}
-								}
-
-								paramList = new ArrayList<String>(Arrays.asList(params.split(",")));
-								for (int i = 0; i < paramList.size(); i++) {
-									paramList.set(i, paramList.get(i).trim());
-									boolean changed = true;
-									String p = paramList.get(i).substring(0, paramList.get(i).length());
-									while (changed) {
-										changed = false;
-										for (int i2 = 0; i2 < arrayIndexes.size(); i2++) {
-											if (p.contains("~" + i2 + "~")) {
-												p = p.replace("~" + i2 + "~", arrayIndexes.get(i2));
-												changed = true;
-											}
-										}
-									}
-									paramList.set(i, p);
-								}
-							}
-
-							while (paramList.size() < d.getParameterCount()) {
-								paramList.add("~");
-							}
-							script.recipes.add(new ETActualRecipe(findRecipeDataForRecipe(s).getRecipeFormat(),
-									paramList.toArray(new String[paramList.size()])));
-						} else {
-							if (!ignoreErrors) {
-								int result = JOptionPane.showOptionDialog(this,
-										"The line: " + s + " in " + script.fileName + " at line " + lineNum
-												+ " \n could not be loaded into External Tweaker. Make sure to import all the recipes you need first.\n Any recipes not loaded will be lost if you DO save over the script. \n Make a backup of the script if you have parts you want to keep.",
-										"Script Loading Error", JOptionPane.OK_OPTION, JOptionPane.PLAIN_MESSAGE, null,
-										new Object[] { "Cancel Loading Of Scripts", "Skip loading this Script",
-												"Ignore Once and Continue", "Ignore Everything and Continue" },
-										"Ignore Once and Continue");
-								if (result == 0)
-									return;
-								else if (result == 1) {
-									skippingScript = true;
-									break;
-								} else if (result == 3) {
-									ignoreErrors = true;
-								}
-							}
-						}
-					}
-				} catch (Exception e) {
-					e.printStackTrace();
-					JOptionPane.showOptionDialog(this,
-							e.getLocalizedMessage() + " when loading " + script.fileName + " at line " + lineNum,
-							"Error! Report this issue if you can!", JOptionPane.OK_OPTION, JOptionPane.ERROR_MESSAGE,
-							null, new Object[] { "OK" }, "OK");
-					return;
-				}
-			}
-			if (skippingScript)
-				continue;
-			boolean replaced = false;
-			for (int i = 0; i < scripts.size(); i++) {
-				if (scripts.get(i).fileName.equals(script.fileName)
-						&& scripts.get(i).filePath.equals(script.filePath)) {
-					scripts.set(i, script);
-					replaced = true;
-				}
-			}
-			if (!replaced)
-				scripts.add(script);
-			updateScriptsList(false);
-			comboScripts.setSelectedIndex(0);
-			comboRecipes.setSelectedIndex(-1);
-			updateRecipesList(false);
-			comboRecipes.setSelectedIndex(-1);
-			updateCurrentRecipe();
-			btnNewRecipe.setEnabled(comboScripts.getSelectedIndex() >= 0 && listMethods.getModel().getSize() > 0);
-
-		}
-	}
-
 	public ETRecipeData findRecipeDataForRecipe(String recipe) {
 		if (!recipe.contains("("))
 			return null;
@@ -1809,23 +1486,6 @@ public class AppFrame extends JFrame {
 		return null;
 	}
 
-	public List<File> getScripts(File... files) {
-		List<File> scriptFiles = new ArrayList();
-		for (File file : files) {
-			if (file.isDirectory()) {
-				scriptFiles.addAll(getScripts(file.listFiles()));
-			} else if (file.getAbsolutePath().endsWith(".zs")) {
-				scriptFiles.add(file);
-			}
-		}
-		return scriptFiles;
-	}
-
-	private void saveAllScripts() {
-		for (ETScript s : scripts)
-			saveScript(s);
-	}
-
 	private void saveCurScriptAs() {
 		ETScript script = getCurrentScript().clone();
 		java.awt.FileDialog fd = new java.awt.FileDialog(this, "Save Script As", java.awt.FileDialog.SAVE);
@@ -1843,31 +1503,8 @@ public class AppFrame extends JFrame {
 			if (!script.fileName.endsWith(".zs"))
 				script.fileName += ".zs";
 
-			saveScript(script);
+			controller.saveScript(script);
 		}
-	}
-
-	private void help() {
-		JOptionPane.showOptionDialog(this, "Currently Unimplemented in this version. Coming soon...", "RIP",
-				JOptionPane.YES_NO_OPTION, JOptionPane.PLAIN_MESSAGE, null, new Object[] { "OK" }, "OK");
-	}
-
-	private void download() {
-		if (JOptionPane.showConfirmDialog(this,
-				"Go to download page?\nhttps://minecraft.curseforge.com/projects/external-tweaker/files\nProgram files found under additional files of 1.10.2 versions",
-				"Download", JOptionPane.YES_NO_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.YES_OPTION) {
-			try {
-				Desktop.getDesktop()
-						.browse(new URI("https://minecraft.curseforge.com/projects/external-tweaker/files"));
-			} catch (IOException | URISyntaxException e) {
-				e.printStackTrace();
-			}
-		}
-	}
-
-	private void about() {
-		JOptionPane.showOptionDialog(this, "Made by Bartz24\nPlease make sure versions are the same in the mod and app",
-				"Version 0.4", JOptionPane.YES_NO_OPTION, JOptionPane.PLAIN_MESSAGE, null, new Object[] { "OK" }, "OK");
 	}
 
 	private void sendTableToTextFile() {
@@ -1934,23 +1571,6 @@ public class AppFrame extends JFrame {
 			e.printStackTrace();
 			JOptionPane.showOptionDialog(this, e.getLocalizedMessage(), "Error! Report this issue if you can!",
 					JOptionPane.OK_OPTION, JOptionPane.ERROR_MESSAGE, null, new Object[] { "OK" }, "OK");
-		}
-	}
-
-	private void renameFile() {
-		ETScript script = getCurrentScript();
-		if (script != null) {
-			String fileName = JOptionPane.showInputDialog(this, "Rename script file name", script.fileName);
-			if (!fileName.trim().endsWith(".zs"))
-				fileName = fileName.trim() + ".zs";
-			if (!Strings.isNullOrEmpty(script.filePath)) {
-				File file = new File(script.filePath + File.separator + script.fileName);
-				if (!file.renameTo(new File(script.filePath + File.separator + fileName)))
-					JOptionPane.showOptionDialog(this, "Failed to rename script!", "Error!", JOptionPane.OK_OPTION,
-							JOptionPane.ERROR_MESSAGE, null, new Object[] { "OK" }, "OK");
-			}
-			script.fileName = fileName;
-			updateScriptsList(false);
 		}
 	}
 
