@@ -27,6 +27,7 @@ import com.bartz24.externaltweaker.app.AppFrame;
 import com.bartz24.externaltweaker.app.Utils;
 import com.bartz24.externaltweaker.app.data.ETActualRecipe;
 import com.bartz24.externaltweaker.app.recipe.RecipeHandler;
+import com.bartz24.externaltweaker.app.transfer.CraftingGridTransferHandler;
 
 public class PanelCraftingRecipe extends JPanel {
     private AppFrame mainFrame;
@@ -47,9 +48,6 @@ public class PanelCraftingRecipe extends JPanel {
     private int selectedX = -1;
     private int selectedY = -1;
 
-    // Static field to track the source button of a drag operation
-    private static JButton draggedButton = null;
-
     public PanelCraftingRecipe(AppFrame frame, RecipeHandler recipeHandler, ETActualRecipe recipe) {
         this.mainFrame = frame;
         this.handler = recipeHandler;
@@ -60,97 +58,18 @@ public class PanelCraftingRecipe extends JPanel {
     }
 
     private void initComponents() {
+        TransferHandler gridTransferHandler = new CraftingGridTransferHandler(this);
+
         JPanel gridPanel = new JPanel();
         gridPanel.setLayout(new GridLayout(3, 3, 2, 2));
         gridPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
-
-        TransferHandler dropHandler = new TransferHandler() {
-            @Override
-            public boolean canImport(TransferSupport support) {
-                return support.isDataFlavorSupported(DataFlavor.stringFlavor);
-            }
-
-            @Override
-            public boolean importData(TransferSupport support) {
-                try {
-                    Transferable t = support.getTransferable();
-                    String data = Utils.formatItemId((String) t.getTransferData(DataFlavor.stringFlavor));
-                    JButton btn = (JButton) support.getComponent();
-
-                    if (btn == outputButton) {
-                        setOutputItem(data);
-                    } else {
-                        // Find which grid button this is
-                        for (int y = 0; y < 3; y++) {
-                            for (int x = 0; x < 3; x++) {
-                                if (gridButtons[y][x] == btn) {
-                                    setGridItem(x, y, data);
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                    saveToRecipe();
-                    return true;
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                return false;
-            }
-
-            @Override
-            public int getSourceActions(JComponent c) {
-                return MOVE;
-            }
-
-            @Override
-            protected Transferable createTransferable(JComponent c) {
-                JButton btn = (JButton) c;
-                String data = null;
-                if (btn == outputButton) {
-                    data = outputData;
-                } else {
-                    for (int y = 0; y < 3; y++) {
-                        for (int x = 0; x < 3; x++) {
-                            if (gridButtons[y][x] == btn) {
-                                data = gridData[y][x];
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (data == null || data.equals("null") || data.isEmpty())
-                    return null;
-                return new StringSelection(data);
-            }
-
-            @Override
-            protected void exportDone(JComponent source, Transferable data, int action) {
-                if (action == MOVE) {
-                    // If moved to trash (or elsewhere), we might want to clear source?
-                    // But standard D&D usually clears on move.
-                    // Let's handle clearing in the Trash's import logic or here if we detect it was
-                    // trash.
-                    // Actually, for grid re-arrangement, we might not want to clear immediately if
-                    // we are just swapping.
-                    // But user asked for "drag away to remove", implying dropping on trash clears
-                    // it.
-                    // If we drop on another slot, it copies (or moves).
-                    // Let's rely on the target to decide. If target is trash, it clears.
-                    // If target is another slot, it overwrites.
-                    // Wait, if it's MOVE, we should clear source.
-                    // But if we drag from list, it's COPY.
-                    // If we drag from grid, it should be MOVE.
-                }
-            }
-        };
 
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
                 JButton btn = new JButton("");
                 btn.setPreferredSize(new Dimension(100, 100));
                 btn.setBackground(Color.decode("#8B8B8B"));
-                btn.setTransferHandler(dropHandler);
+                btn.setTransferHandler(gridTransferHandler);
                 btn.setVerticalTextPosition(SwingConstants.BOTTOM);
                 btn.setHorizontalTextPosition(SwingConstants.CENTER);
 
@@ -171,7 +90,9 @@ public class PanelCraftingRecipe extends JPanel {
                         }
 
                         TransferHandler handler = c.getTransferHandler();
-                        draggedButton = (JButton) c; // Track source
+                        if (handler instanceof CraftingGridTransferHandler) {
+                            ((CraftingGridTransferHandler) handler).setDraggedButton((JButton) c);
+                        }
                         handler.exportAsDrag(c, e, TransferHandler.MOVE);
                     }
                 });
@@ -200,14 +121,16 @@ public class PanelCraftingRecipe extends JPanel {
         outputButton = new JButton("");
         outputButton.setPreferredSize(new Dimension(120, 120));
         outputButton.setBackground(Color.decode("#8B8B8B"));
-        outputButton.setTransferHandler(dropHandler);
+        outputButton.setTransferHandler(gridTransferHandler);
         outputButton.setVerticalTextPosition(SwingConstants.BOTTOM);
         outputButton.setHorizontalTextPosition(SwingConstants.CENTER);
         outputButton.addMouseMotionListener(new MouseAdapter() {
             public void mouseDragged(MouseEvent e) {
                 JComponent c = (JComponent) e.getSource();
                 TransferHandler handler = c.getTransferHandler();
-                draggedButton = (JButton) c; // Track source
+                if (handler instanceof CraftingGridTransferHandler) {
+                    ((CraftingGridTransferHandler) handler).setDraggedButton((JButton) c);
+                }
                 handler.exportAsDrag(c, e, TransferHandler.MOVE);
             }
         });
@@ -272,150 +195,6 @@ public class PanelCraftingRecipe extends JPanel {
                 return true;
             }
         });
-
-        // Update dropHandler to handle exportDone for clearing
-        TransferHandler gridTransferHandler = new TransferHandler() {
-            @Override
-            public boolean canImport(TransferSupport support) {
-                return support.isDataFlavorSupported(DataFlavor.stringFlavor);
-            }
-
-            @Override
-            public boolean importData(TransferSupport support) {
-                try {
-                    Transferable t = support.getTransferable();
-                    JButton btn = (JButton) support.getComponent();
-
-                    if (t instanceof ButtonTransferable && ((ButtonTransferable) t).getSource() == btn) {
-                        return false;
-                    }
-
-                    String data = Utils.formatItemId((String) t.getTransferData(DataFlavor.stringFlavor));
-
-                    if (btn == outputButton) {
-                        String rawData = Utils.unformatItemId(data);
-                        if (rawData.startsWith("ore:")) {
-                            String rep = Utils.getOreDictRepresentativeItem(rawData);
-                            if (rep != null) {
-                                data = rep;
-                            }
-                        }
-                        setOutputItem(data);
-                    } else {
-                        // Find which grid button this is
-                        for (int y = 0; y < 3; y++) {
-                            for (int x = 0; x < 3; x++) {
-                                if (gridButtons[y][x] == btn) {
-                                    // Check for swap
-                                    if (draggedButton != null && draggedButton != btn) {
-                                        JButton sourceBtn = draggedButton;
-                                        // Find source coordinates
-                                        int sourceX = -1;
-                                        int sourceY = -1;
-                                        for (int sy = 0; sy < 3; sy++) {
-                                            for (int sx = 0; sx < 3; sx++) {
-                                                if (gridButtons[sy][sx] == sourceBtn) {
-                                                    sourceX = sx;
-                                                    sourceY = sy;
-                                                    break;
-                                                }
-                                            }
-                                        }
-
-                                        if (sourceX != -1) {
-                                            // Perform swap
-                                            String currentTargetItem = gridData[y][x];
-                                            setGridItem(sourceX, sourceY, currentTargetItem);
-                                            // Reset draggedButton to indicate swap was handled
-                                            draggedButton = null;
-                                        }
-                                    }
-
-                                    if (chkUseOreDict.isSelected()) {
-                                        System.out.println("Checking OreDict for: " + data);
-                                        java.util.List<String> ores = com.bartz24.externaltweaker.app.model.OreDictRegistry
-                                                .getInstance().getOreDictsForItem(data);
-                                        if (!ores.isEmpty()) {
-                                            data = Utils.formatItemId("ore:" + ores.get(0));
-                                            System.out.println("Converted to OreDict: " + data);
-                                        }
-                                    }
-                                    setGridItem(x, y, data);
-                                    selectedX = x;
-                                    selectedY = y;
-                                    updateSelectionDisplay();
-                                    saveToRecipe();
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                    saveToRecipe();
-                    return true;
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                return false;
-            }
-
-            @Override
-            public int getSourceActions(JComponent c) {
-                return MOVE;
-            }
-
-            @Override
-            protected Transferable createTransferable(JComponent c) {
-                JButton btn = (JButton) c;
-                String data = null;
-                if (btn == outputButton) {
-                    data = outputData;
-                } else {
-                    for (int y = 0; y < 3; y++) {
-                        for (int x = 0; x < 3; x++) {
-                            if (gridButtons[y][x] == btn) {
-                                data = gridData[y][x];
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (data == null || data.equals("null") || data.isEmpty())
-                    return null;
-                return new ButtonTransferable(btn, data);
-            }
-
-            @Override
-            protected void exportDone(JComponent source, Transferable data, int action) {
-                if (action == MOVE) {
-                    if (draggedButton == null) {
-                        // Swapped, do nothing
-                    } else {
-                        JButton btn = (JButton) source;
-                        if (btn == outputButton) {
-                            setOutputItem("null");
-                        } else {
-                            for (int y = 0; y < 3; y++) {
-                                for (int x = 0; x < 3; x++) {
-                                    if (gridButtons[y][x] == btn) {
-                                        setGridItem(x, y, "null");
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    saveToRecipe();
-                    draggedButton = null; // Cleanup
-                }
-            }
-        };
-
-        for (int y = 0; y < 3; y++) {
-            for (int x = 0; x < 3; x++) {
-                gridButtons[y][x].setTransferHandler(gridTransferHandler);
-            }
-        }
-        outputButton.setTransferHandler(gridTransferHandler);
 
         GroupLayout layout = new GroupLayout(this);
         this.setLayout(layout);
@@ -545,37 +324,22 @@ public class PanelCraftingRecipe extends JPanel {
         saveToRecipe();
     }
 
-    private class ButtonTransferable implements Transferable {
-        private JButton btn;
-        private String data;
+    public JButton[][] getGridButtons() {
+        return gridButtons;
+    }
 
-        public ButtonTransferable(JButton btn, String data) {
-            this.btn = btn;
-            this.data = data;
-        }
+    public JButton getOutputButton() {
+        return outputButton;
+    }
 
-        @Override
-        public DataFlavor[] getTransferDataFlavors() {
-            return new DataFlavor[] { DataFlavor.stringFlavor };
-        }
+    public boolean isUseOreDict() {
+        return chkUseOreDict.isSelected();
+    }
 
-        @Override
-        public boolean isDataFlavorSupported(DataFlavor flavor) {
-            return DataFlavor.stringFlavor.equals(flavor);
-        }
-
-        @Override
-        public Object getTransferData(DataFlavor flavor)
-                throws java.awt.datatransfer.UnsupportedFlavorException, java.io.IOException {
-            if (DataFlavor.stringFlavor.equals(flavor)) {
-                return data;
-            }
-            throw new java.awt.datatransfer.UnsupportedFlavorException(flavor);
-        }
-
-        public JButton getSource() {
-            return btn;
-        }
+    public void setSelectedSlot(int x, int y) {
+        this.selectedX = x;
+        this.selectedY = y;
+        updateSelectionDisplay();
     }
 
     public void setGridItem(int x, int y, String item) {

@@ -9,27 +9,20 @@ import java.awt.event.InputEvent;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.awt.event.KeyEvent;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
+
 import javax.swing.AbstractButton;
-import javax.swing.ImageIcon;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListModel;
-import javax.swing.DefaultRowSorter;
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
 import javax.swing.JButton;
@@ -51,27 +44,28 @@ import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.LayoutStyle.ComponentPlacement;
 import javax.swing.ListSelectionModel;
-import javax.swing.RowSorter;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
+import com.bartz24.externaltweaker.app.service.FileExportService;
+import com.bartz24.externaltweaker.app.ui.renderer.IconRenderer;
+import com.bartz24.externaltweaker.app.controller.AppController;
+import com.bartz24.externaltweaker.app.controller.TableController;
+import com.bartz24.externaltweaker.app.panels.PanelParameterEdit;
+import com.bartz24.externaltweaker.app.data.ETActualRecipe;
+import com.bartz24.externaltweaker.app.data.ETRecipeData;
+import com.bartz24.externaltweaker.app.data.ETScript;
+import com.bartz24.externaltweaker.app.recipe.RecipeHandler;
+import com.bartz24.externaltweaker.app.recipe.ShapedCraftingHandler;
+import com.bartz24.externaltweaker.app.service.DataService;
+import com.bartz24.externaltweaker.app.panels.PanelImportExportDialog;
+import com.bartz24.externaltweaker.app.panels.PanelCraftingRecipe;
+import com.bartz24.externaltweaker.app.data.ImportedData;
 import javax.swing.border.BevelBorder;
 import javax.swing.border.SoftBevelBorder;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.table.DefaultTableModel;
-
-import com.bartz24.externaltweaker.app.data.ETActualRecipe;
-import com.bartz24.externaltweaker.app.data.ETRecipeData;
-import com.bartz24.externaltweaker.app.data.ETScript;
-import com.bartz24.externaltweaker.app.panels.PanelImportExportDialog;
-import com.bartz24.externaltweaker.app.panels.PanelParameterEdit;
-import com.bartz24.externaltweaker.app.panels.PanelCraftingRecipe;
-import com.bartz24.externaltweaker.app.recipe.RecipeHandler;
-import com.bartz24.externaltweaker.app.recipe.ShapedCraftingHandler;
-import com.bartz24.externaltweaker.app.service.DataService;
-import com.bartz24.externaltweaker.app.controller.AppController;
 
 public class AppFrame extends JFrame {
 	Object[][] itemMappings;
@@ -121,6 +115,8 @@ public class AppFrame extends JFrame {
 	public IconLoader iconLoader;
 	public AppController controller;
 	public DataService dataService = new DataService();
+	public TableController tableController = new TableController();
+	public FileExportService fileExportService = new FileExportService();
 
 	public File iconDir;
 
@@ -143,7 +139,7 @@ public class AppFrame extends JFrame {
 
 		this.setPreferredSize(new Dimension(1200, 800));
 
-		loadBlacklist();
+		this.blacklist = dataService.loadBlacklist();
 		loadOreDictCsv(oredictCsv);
 
 		recipeHandlers.add(new ShapedCraftingHandler());
@@ -199,43 +195,7 @@ public class AppFrame extends JFrame {
 		};
 
 		if (iconDir != null) {
-			table.getColumnModel().getColumn(1).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
-				@Override
-				public java.awt.Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
-						boolean hasFocus, int row, int column) {
-					javax.swing.JLabel label = (javax.swing.JLabel) super.getTableCellRendererComponent(table, value,
-							isSelected, hasFocus, row, column);
-					if (iconLoader != null) {
-						String id = (String) table.getValueAt(row, 0);
-						String name = (String) value;
-						String iconItem = id;
-						// OreDict handling
-						String rawId = Utils.unformatItemId(id);
-						if (rawId.startsWith("ore:")) {
-							String rep = Utils.getOreDictRepresentativeItem(rawId);
-							if (rep != null) {
-								iconItem = rep;
-							}
-							System.out.println("Table Renderer: ID=" + id + ", Raw=" + rawId + ", Rep=" + rep
-									+ ", IconItem=" + iconItem);
-						}
-
-						// Use the name of the iconItem for lookup, not the display name of the row
-						// (which might be the OreDict name)
-						String iconName = name;
-						if (!iconItem.equals(id)) {
-							String resolvedName = Utils.getNameFromId(iconItem);
-							if (resolvedName != null && !resolvedName.isEmpty()) {
-								iconName = resolvedName;
-							}
-						}
-
-						ImageIcon icon = iconLoader.loadIcon(iconItem, iconName, 32);
-						label.setIcon(icon);
-					}
-					return label;
-				}
-			});
+			table.getColumnModel().getColumn(1).setCellRenderer(new IconRenderer(iconLoader));
 			table.setRowHeight(36); // Make rows taller for icons
 		}
 
@@ -275,7 +235,8 @@ public class AppFrame extends JFrame {
 			}
 		});
 
-		loadTable("Items", "");
+		tableController.loadTable(table, "Items", "", itemMappings, fluidMappings, oreDictMappings, blacklist,
+				iconLoader);
 
 		table.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		table.setFillsViewportHeight(true);
@@ -298,7 +259,8 @@ public class AppFrame extends JFrame {
 		ActionListener tableSelectListener = new ActionListener() {
 			public void actionPerformed(ActionEvent actionEvent) {
 				AbstractButton aBtn = (AbstractButton) actionEvent.getSource();
-				loadTable(aBtn.getText(), txtSearchTable.getText());
+				tableController.loadTable(table, aBtn.getText(), txtSearchTable.getText(), itemMappings, fluidMappings,
+						oreDictMappings, blacklist, iconLoader);
 			}
 		};
 
@@ -345,8 +307,10 @@ public class AppFrame extends JFrame {
 			}
 
 			public void search() {
-				loadTable(rdbtnItems.isSelected() ? "Items" : rdbtnFluids.isSelected() ? "Fluids" : "Ore Dict",
-						txtSearchTable.getText().trim().toLowerCase());
+				tableController.loadTable(table,
+						rdbtnItems.isSelected() ? "Items" : rdbtnFluids.isSelected() ? "Fluids" : "Ore Dict",
+						txtSearchTable.getText().trim().toLowerCase(), itemMappings, fluidMappings, oreDictMappings,
+						blacklist, iconLoader);
 			}
 		});
 		searchTimer.setRepeats(false);
@@ -372,8 +336,10 @@ public class AppFrame extends JFrame {
 		JButton btnSearchTable = new JButton("Search Table");
 		btnSearchTable.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				loadTable(rdbtnItems.isSelected() ? "Items" : rdbtnFluids.isSelected() ? "Fluids" : "Ore Dict",
-						txtSearchTable.getText().trim().toLowerCase());
+				tableController.loadTable(table,
+						rdbtnItems.isSelected() ? "Items" : rdbtnFluids.isSelected() ? "Fluids" : "Ore Dict",
+						txtSearchTable.getText().trim().toLowerCase(), itemMappings, fluidMappings, oreDictMappings,
+						blacklist, iconLoader);
 			}
 		});
 
@@ -901,125 +867,6 @@ public class AppFrame extends JFrame {
 		pnlRecipeEdit.repaint();
 	}
 
-	private void loadBlacklist() {
-		blacklist.clear();
-		File f = new File("blacklist.txt");
-		if (f.exists()) {
-			try (BufferedReader reader = new BufferedReader(new FileReader(f))) {
-				String line;
-				while ((line = reader.readLine()) != null) {
-					if (!line.trim().isEmpty())
-						blacklist.add(line.trim().toLowerCase());
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
-	}
-
-	private void loadTable(String type, String filter) {
-		List<RowSorter.SortKey> keys = table.getRowSorter() != null
-				? ((DefaultRowSorter) table.getRowSorter()).getSortKeys()
-				: new ArrayList<RowSorter.SortKey>();
-		Object[][] array = type.equals("Items") ? this.itemMappings
-				: type.equals("Fluids") ? this.fluidMappings : type.equals("Ore Dict") ? this.oreDictMappings : null;
-		if (array == null)
-			return;
-
-		List<Integer> indexesValid = new ArrayList<Integer>();
-		for (int i = 0; i < array.length; i++) {
-			String cleanName = Utils.stripFormatting(array[i][1].toString());
-
-			boolean blacklisted = false;
-			for (String s : blacklist) {
-				if (array[i][0].toString().toLowerCase().contains(s)
-						|| cleanName.toLowerCase().contains(s)) {
-					blacklisted = true;
-					break;
-				}
-			}
-			if (blacklisted)
-				continue;
-
-			if (!(filter == null || filter.isEmpty())) {
-				if (array[i][0].toString().toLowerCase().contains(filter)
-						|| cleanName.toLowerCase().contains(filter))
-					indexesValid.add(i);
-			} else {
-				indexesValid.add(i);
-			}
-		}
-		Object[][] newArray = new Object[indexesValid.size()][2];
-		for (int i = 0; i < indexesValid.size(); i++) {
-			newArray[i][0] = array[indexesValid.get(i)][0];
-			newArray[i][1] = Utils.stripFormatting(array[indexesValid.get(i)][1].toString());
-		}
-		array = newArray;
-
-		Arrays.sort(array, new Comparator<Object[]>() {
-			@Override
-			public int compare(Object[] o1, Object[] o2) {
-				String id1 = (String) o1[0];
-				String id2 = (String) o2[0];
-
-				String mod1 = "", name1 = "";
-				int meta1 = 0;
-				try {
-					String clean1 = id1.replace("<", "").replace(">", "");
-					String[] parts1 = clean1.split(":");
-					if (parts1.length > 0)
-						mod1 = parts1[0];
-					if (parts1.length > 1)
-						name1 = parts1[1];
-					if (parts1.length > 2 && !parts1[2].equals("*"))
-						meta1 = Integer.parseInt(parts1[2]);
-				} catch (Exception e) {
-				}
-
-				String mod2 = "", name2 = "";
-				int meta2 = 0;
-				try {
-					String clean2 = id2.replace("<", "").replace(">", "");
-					String[] parts2 = clean2.split(":");
-					if (parts2.length > 0)
-						mod2 = parts2[0];
-					if (parts2.length > 1)
-						name2 = parts2[1];
-					if (parts2.length > 2 && !parts2[2].equals("*"))
-						meta2 = Integer.parseInt(parts2[2]);
-				} catch (Exception e) {
-				}
-
-				int modCompare = mod1.compareToIgnoreCase(mod2);
-				if (modCompare != 0)
-					return modCompare;
-
-				int nameCompare = name1.compareToIgnoreCase(name2);
-				if (nameCompare != 0)
-					return nameCompare;
-
-				return Integer.compare(meta1, meta2);
-			}
-		});
-
-		table.setModel(new DefaultTableModel(array, new String[] { "ID", "Name" }));
-		if (table.getColumnCount() > 2) {
-			table.getColumnModel().removeColumn(table.getColumnModel().getColumn(2));
-		}
-		if (table.getRowSorter() != null) {
-			DefaultRowSorter sorter = ((DefaultRowSorter) table.getRowSorter());
-			sorter.setSortKeys(keys);
-			sorter.sort();
-		}
-
-		// table.clearSelection();
-
-		if (iconDir != null) {
-			table.getColumnModel().getColumn(1).setCellRenderer(new IconRenderer(iconDir));
-			table.setRowHeight(36); // Make rows taller for icons
-		}
-	}
-
 	private List<String> methodDisplays() {
 		List<String> displays = new ArrayList<String>();
 		List<ETRecipeData> recipeDataNew = new ArrayList<ETRecipeData>();
@@ -1068,67 +915,6 @@ public class AppFrame extends JFrame {
 				frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 			}
 		});
-	}
-
-	// Inner class for rendering icons
-	class IconRenderer extends javax.swing.table.DefaultTableCellRenderer {
-		File iconDir;
-
-		public IconRenderer(File iconDir) {
-			this.iconDir = iconDir;
-		}
-
-		@Override
-		public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,
-				int row, int column) {
-			JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row,
-					column);
-
-			Object idObj = table.getValueAt(row, 0);
-			Object nameObj = table.getValueAt(row, 1);
-			if (idObj instanceof String) {
-				String id = (String) idObj;
-				String name = (nameObj instanceof String) ? (String) nameObj : "";
-				String iconItem = id;
-
-				// OreDict handling
-				String rawId = Utils.unformatItemId(id);
-				if (rawId.startsWith("ore:")) {
-					String rep = null;
-					// Try getting from model first
-					int modelRow = table.convertRowIndexToModel(row);
-					if (table.getModel().getColumnCount() > 2) {
-						Object val = table.getModel().getValueAt(modelRow, 2);
-						if (val instanceof String)
-							rep = (String) val;
-					}
-
-					if (rep == null)
-						rep = Utils.getOreDictRepresentativeItem(rawId);
-
-					if (rep != null) {
-						iconItem = rep;
-					}
-					System.out.println("Table Renderer: ID=" + id + ", Raw=" + rawId + ", Rep=" + rep
-							+ ", IconItem=" + iconItem);
-				}
-
-				// Use the name of the iconItem for lookup, not the display name of the row
-				// (which might be the OreDict name)
-				String iconName = name;
-				if (!iconItem.equals(id)) {
-					String resolvedName = Utils.getNameFromId(iconItem);
-					if (resolvedName != null && !resolvedName.isEmpty()) {
-						iconName = resolvedName;
-					}
-				}
-
-				javax.swing.ImageIcon icon = iconLoader.loadIcon(iconItem, iconName, 32);
-				label.setIcon(icon);
-			}
-			return label;
-		}
-
 	}
 
 	private void exportData() {
@@ -1181,14 +967,14 @@ public class AppFrame extends JFrame {
 		if (input != 0)
 			return;
 		try {
-			FileInputStream saveFile = new FileInputStream(dataPanel.txtPath.getText().trim());
-			ObjectInputStream save = new ObjectInputStream(saveFile);
+			File file = new File(dataPanel.txtPath.getText().trim());
+			ImportedData currentData = new ImportedData(itemMappings, fluidMappings, oreDictMappings, recipeData);
+			ImportedData newData = dataService.importData(file, settings, currentData);
 
-			if (settings[4]) {
-				importOverride(settings, save);
-			} else {
-				importAdd(settings, save);
-			}
+			this.itemMappings = newData.itemMappings;
+			this.fluidMappings = newData.fluidMappings;
+			this.oreDictMappings = newData.oreDictMappings;
+			this.recipeData = (ArrayList<ETRecipeData>) newData.recipeData;
 
 			DefaultListModel<String> model = new DefaultListModel<String>();
 			for (String s : methodDisplays()) {
@@ -1196,9 +982,10 @@ public class AppFrame extends JFrame {
 			}
 			listMethods.setModel(model);
 			txtSearchTable.setText("");
-			loadTable(rdbtnItems.isSelected() ? "Items" : rdbtnFluids.isSelected() ? "Fluids" : "Ore Dict", "");
+			tableController.loadTable(table,
+					rdbtnItems.isSelected() ? "Items" : rdbtnFluids.isSelected() ? "Fluids" : "Ore Dict", "",
+					itemMappings, fluidMappings, oreDictMappings, blacklist, iconLoader);
 
-			save.close();
 		} catch (Exception exc) {
 			exc.printStackTrace();
 			JOptionPane.showOptionDialog(this, exc.getLocalizedMessage(),
@@ -1207,99 +994,6 @@ public class AppFrame extends JFrame {
 		}
 		JOptionPane.showOptionDialog(this, "Import Finished!", "Done", JOptionPane.OK_OPTION, JOptionPane.PLAIN_MESSAGE,
 				null, new Object[] { "OK" }, "OK");
-	}
-
-	private void importOverride(boolean[] settings, ObjectInputStream save) throws IOException, ClassNotFoundException {
-		if (settings[1])
-			itemMappings = (Object[][]) save.readObject();
-		else
-			save.readObject();
-		if (settings[2])
-			fluidMappings = (Object[][]) save.readObject();
-		else
-			save.readObject();
-		if (settings[3])
-			oreDictMappings = (Object[][]) save.readObject();
-		else
-			save.readObject();
-		if (settings[0])
-			recipeData = (ArrayList<ETRecipeData>) save.readObject();
-		else
-			save.readObject();
-	}
-
-	private void importAdd(boolean[] settings, ObjectInputStream save) throws IOException, ClassNotFoundException {
-		if (settings[1]) {
-			Object[][] iMap = (Object[][]) save.readObject();
-			List<Object[]> iMappings = new ArrayList<Object[]>(Arrays.asList(itemMappings));
-			for (int i = 0; i < iMap.length; i++) {
-				boolean contains = false;
-				for (int i2 = 0; i2 < iMappings.size(); i2++) {
-					if (iMappings.get(i2)[0].equals(iMap[i][0])) {
-						contains = true;
-						break;
-					}
-				}
-				if (!contains)
-					iMappings.add(iMap[i]);
-			}
-			itemMappings = iMappings.toArray(new Object[iMappings.size()][2]);
-		} else
-			save.readObject();
-		if (settings[2]) {
-			Object[][] fMap = (Object[][]) save.readObject();
-			List<Object[]> fMappings = new ArrayList(Arrays.asList(fluidMappings));
-			for (int i = 0; i < fMap.length; i++) {
-				boolean contains = false;
-				for (int i2 = 0; i2 < fMappings.size(); i2++) {
-					if (fMappings.get(i2)[0].equals(fMap[i][0])) {
-						contains = true;
-						break;
-					}
-				}
-				if (!contains)
-					fMappings.add(fMap[i]);
-			}
-			fluidMappings = fMappings.toArray(new Object[fMappings.size()][2]);
-		} else
-			save.readObject();
-		if (settings[3]) {
-			Object[][] oMap = (Object[][]) save.readObject();
-			List<Object[]> oMappings = new ArrayList(Arrays.asList(oreDictMappings));
-			for (int i = 0; i < oMap.length; i++) {
-				boolean contains = false;
-				for (int i2 = 0; i2 < oMappings.size(); i2++) {
-					if (oMappings.get(i2)[0].equals(oMap[i][0])) {
-						contains = true;
-						break;
-					}
-				}
-				if (!contains)
-					oMappings.add(oMap[i]);
-			}
-			oreDictMappings = oMappings.toArray(new Object[oMappings.size()][2]);
-		} else
-			save.readObject();
-		if (settings[0]) {
-			List<ETRecipeData> rList = (ArrayList) save.readObject();
-			for (int i2 = 0; i2 < rList.size(); i2++) {
-				boolean contains = false;
-				for (int i = 0; i < recipeData.size(); i++) {
-					if (rList.get(i2).getRecipeFormat().equals(recipeData.get(i).getRecipeFormat())) {
-						contains = true;
-						for (int x = 0; x < rList.get(i2).getParameterTypes().length; x++) {
-							if ((recipeData.get(i).getParamName(x) == null
-									|| recipeData.get(i).getParamName(x).isEmpty()))
-								recipeData.get(i).setParamName(x, rList.get(i2).getParamName(x));
-						}
-						break;
-					}
-				}
-				if (!contains)
-					recipeData.add(rList.get(i2));
-			}
-		} else
-			save.readObject();
 	}
 
 	public ETRecipeData findRecipeDataForRecipe(String recipe) {
@@ -1358,19 +1052,9 @@ public class AppFrame extends JFrame {
 		} else
 			return;
 
-		BufferedWriter writer = null;
 		try {
-
-			writer = new BufferedWriter(new FileWriter(new File(filePath)));
-
-			writer.write("TABLE DATA FROM EXTERNAL TWEAKER ("
-					+ (rdbtnItems.isSelected() ? "Items" : rdbtnFluids.isSelected() ? "Fluids" : "Ore Dict") + ")\n");
-
-			for (int i = 0; i < table.getRowCount(); i++) {
-				writer.write(table.getValueAt(i, 0) + ": " + table.getValueAt(i, 1) + "\n");
-			}
-
-			writer.close();
+			fileExportService.writeTableToFile(table, new File(filePath),
+					rdbtnItems.isSelected() ? "Items" : rdbtnFluids.isSelected() ? "Fluids" : "Ore Dict");
 		} catch (Exception e) {
 			e.printStackTrace();
 			JOptionPane.showOptionDialog(this, e.getLocalizedMessage(), "Error! Report this issue if you can!",
@@ -1392,18 +1076,8 @@ public class AppFrame extends JFrame {
 		} else
 			return;
 
-		BufferedWriter writer = null;
 		try {
-
-			writer = new BufferedWriter(new FileWriter(new File(filePath)));
-
-			writer.write("RECIPE DATA FROM EXTERNAL TWEAKER\n");
-
-			for (int i = 0; i < recipeData.size(); i++) {
-				writer.write(recipeData.get(i).getRecipeFormat() + "\n");
-			}
-
-			writer.close();
+			fileExportService.writeRecipesToFile(recipeData, new File(filePath));
 		} catch (Exception e) {
 			e.printStackTrace();
 			JOptionPane.showOptionDialog(this, e.getLocalizedMessage(), "Error! Report this issue if you can!",

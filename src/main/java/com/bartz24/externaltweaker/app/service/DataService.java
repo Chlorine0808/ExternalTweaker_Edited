@@ -5,8 +5,13 @@ import java.io.FileInputStream;
 import java.io.ObjectInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.Arrays;
 
 import com.bartz24.externaltweaker.app.data.ETRecipeData;
+import com.bartz24.externaltweaker.app.data.ImportedData;
 import com.bartz24.externaltweaker.app.model.FluidRegistry;
 import com.bartz24.externaltweaker.app.model.ItemRegistry;
 import com.bartz24.externaltweaker.app.model.OreDictRegistry;
@@ -174,6 +179,126 @@ public class DataService {
             oos.writeObject(rList);
         } catch (Exception e) {
             throw new Exception("Failed to save merged data: " + e.getMessage(), e);
+        }
+    }
+
+    public List<String> loadBlacklist() {
+        List<String> blacklist = new ArrayList<>();
+        File f = new File("blacklist.txt");
+        if (f.exists()) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(f))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.trim().isEmpty())
+                        blacklist.add(line.trim().toLowerCase());
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return blacklist;
+    }
+
+    public ImportedData importData(File file, boolean[] settings, ImportedData currentData) throws Exception {
+        try (FileInputStream saveFile = new FileInputStream(file);
+                ObjectInputStream save = new ObjectInputStream(saveFile)) {
+
+            Object[][] itemMappings = currentData.itemMappings;
+            Object[][] fluidMappings = currentData.fluidMappings;
+            Object[][] oreDictMappings = currentData.oreDictMappings;
+            List<ETRecipeData> recipeData = currentData.recipeData;
+
+            if (settings[4]) { // Override
+                if (settings[1])
+                    itemMappings = (Object[][]) save.readObject();
+                else
+                    save.readObject();
+                if (settings[2])
+                    fluidMappings = (Object[][]) save.readObject();
+                else
+                    save.readObject();
+                if (settings[3])
+                    oreDictMappings = (Object[][]) save.readObject();
+                else
+                    save.readObject();
+                if (settings[0])
+                    recipeData = (ArrayList<ETRecipeData>) save.readObject();
+                else
+                    save.readObject();
+            } else { // Add
+                if (settings[1]) {
+                    Object[][] iMap = (Object[][]) save.readObject();
+                    List<Object[]> iMappings = new ArrayList<Object[]>(Arrays.asList(itemMappings));
+                    for (int i = 0; i < iMap.length; i++) {
+                        boolean contains = false;
+                        for (int i2 = 0; i2 < iMappings.size(); i2++) {
+                            if (iMappings.get(i2)[0].equals(iMap[i][0])) {
+                                contains = true;
+                                break;
+                            }
+                        }
+                        if (!contains)
+                            iMappings.add(iMap[i]);
+                    }
+                    itemMappings = iMappings.toArray(new Object[iMappings.size()][2]);
+                } else
+                    save.readObject();
+                if (settings[2]) {
+                    Object[][] fMap = (Object[][]) save.readObject();
+                    List<Object[]> fMappings = new ArrayList(Arrays.asList(fluidMappings));
+                    for (int i = 0; i < fMap.length; i++) {
+                        boolean contains = false;
+                        for (int i2 = 0; i2 < fMappings.size(); i2++) {
+                            if (fMappings.get(i2)[0].equals(fMap[i][0])) {
+                                contains = true;
+                                break;
+                            }
+                        }
+                        if (!contains)
+                            fMappings.add(fMap[i]);
+                    }
+                    fluidMappings = fMappings.toArray(new Object[fMappings.size()][2]);
+                } else
+                    save.readObject();
+                if (settings[3]) {
+                    Object[][] oMap = (Object[][]) save.readObject();
+                    List<Object[]> oMappings = new ArrayList(Arrays.asList(oreDictMappings));
+                    for (int i = 0; i < oMap.length; i++) {
+                        boolean contains = false;
+                        for (int i2 = 0; i2 < oMappings.size(); i2++) {
+                            if (oMappings.get(i2)[0].equals(oMap[i][0])) {
+                                contains = true;
+                                break;
+                            }
+                        }
+                        if (!contains)
+                            oMappings.add(oMap[i]);
+                    }
+                    oreDictMappings = oMappings.toArray(new Object[oMappings.size()][2]);
+                } else
+                    save.readObject();
+                if (settings[0]) {
+                    List<ETRecipeData> rList = (ArrayList) save.readObject();
+                    for (int i2 = 0; i2 < rList.size(); i2++) {
+                        boolean contains = false;
+                        for (int i = 0; i < recipeData.size(); i++) {
+                            if (rList.get(i2).getRecipeFormat().equals(recipeData.get(i).getRecipeFormat())) {
+                                contains = true;
+                                for (int x = 0; x < rList.get(i2).getParameterTypes().length; x++) {
+                                    if ((recipeData.get(i).getParamName(x) == null
+                                            || recipeData.get(i).getParamName(x).isEmpty()))
+                                        recipeData.get(i).setParamName(x, rList.get(i2).getParamName(x));
+                                }
+                                break;
+                            }
+                        }
+                        if (!contains)
+                            recipeData.add(rList.get(i2));
+                    }
+                } else
+                    save.readObject();
+            }
+            return new ImportedData(itemMappings, fluidMappings, oreDictMappings, recipeData);
         }
     }
 }
