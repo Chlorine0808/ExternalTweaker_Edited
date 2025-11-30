@@ -40,6 +40,15 @@ public class TableController {
             if (blacklisted)
                 continue;
 
+            if (type.equals("Ore Dict")) {
+                String oreName = cleanName; // This is the name without ore: prefix
+                List<String> items = com.bartz24.externaltweaker.app.model.OreDictRegistry.getInstance()
+                        .getItemsForOreDict(oreName);
+                if (items == null || items.isEmpty()) {
+                    continue;
+                }
+            }
+
             if (!(filter == null || filter.isEmpty())) {
                 if (array[i][0].toString().toLowerCase().contains(filter) || cleanName.toLowerCase().contains(filter))
                     indexesValid.add(i);

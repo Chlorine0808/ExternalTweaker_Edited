@@ -3,18 +3,14 @@ package com.bartz24.externaltweaker.app.panels;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.StringSelection;
-import java.awt.datatransfer.Transferable;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
 import javax.swing.BorderFactory;
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
-import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -24,21 +20,28 @@ import javax.swing.SwingConstants;
 import javax.swing.TransferHandler;
 
 import com.bartz24.externaltweaker.app.AppFrame;
-import com.bartz24.externaltweaker.app.Utils;
+
 import com.bartz24.externaltweaker.app.data.ETActualRecipe;
 import com.bartz24.externaltweaker.app.recipe.RecipeHandler;
 import com.bartz24.externaltweaker.app.transfer.CraftingGridTransferHandler;
+import com.bartz24.externaltweaker.app.ui.slots.AbstractSlot;
+import com.bartz24.externaltweaker.app.ui.slots.InputOreDictSlot;
+import com.bartz24.externaltweaker.app.ui.slots.OutputItemStackSlot;
 
 public class PanelCraftingRecipe extends JPanel {
     private AppFrame mainFrame;
     private RecipeHandler handler;
     private ETActualRecipe currentRecipe;
 
-    private JButton[][] gridButtons = new JButton[3][3];
-    private JButton outputButton;
+    private InputOreDictSlot[][] gridButtons = new InputOreDictSlot[3][3];
+    private OutputItemStackSlot outputButton;
     private JPanel trashPanel;
-    private String[][] gridData = new String[3][3];
-    private String outputData = "null";
+    // gridData is now managed by slots, but we keep it for compatibility with
+    // handler if needed,
+    // or we can remove it and use slots directly.
+    // For now, let's try to rely on slots.
+    // private String[][] gridData = new String[3][3];
+    // private String outputData = "null";
 
     private javax.swing.JCheckBox chkUseOreDict;
     private JPanel selectedItemPanel;
@@ -66,7 +69,7 @@ public class PanelCraftingRecipe extends JPanel {
 
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
-                JButton btn = new JButton("");
+                InputOreDictSlot btn = new InputOreDictSlot(mainFrame);
                 btn.setPreferredSize(new Dimension(100, 100));
                 btn.setBackground(Color.decode("#8B8B8B"));
                 btn.setTransferHandler(gridTransferHandler);
@@ -118,7 +121,7 @@ public class PanelCraftingRecipe extends JPanel {
             }
         }
 
-        outputButton = new JButton("");
+        outputButton = new OutputItemStackSlot(mainFrame);
         outputButton.setPreferredSize(new Dimension(120, 120));
         outputButton.setBackground(Color.decode("#8B8B8B"));
         outputButton.setTransferHandler(gridTransferHandler);
@@ -184,14 +187,6 @@ public class PanelCraftingRecipe extends JPanel {
 
             @Override
             public boolean importData(TransferSupport support) {
-                // When dropped here, we don't do anything with the data,
-                // but we return true to indicate success.
-                // The exportDone of the source should handle clearing if it was a MOVE.
-                // BUT, exportDone doesn't know where it was dropped easily.
-                // So we need a way to callback or we just handle it here if we can identify
-                // source.
-                // Actually, standard Swing D&D MOVE action implies source removes it.
-                // Let's implement exportDone in the buttons to clear if action was MOVE.
                 return true;
             }
         });
@@ -244,91 +239,18 @@ public class PanelCraftingRecipe extends JPanel {
                                 .addContainerGap()));
     }
 
-    private String[][] originalGridItems = new String[3][3];
-
     private void cycleItem(int x, int y, boolean next) {
-        String current = gridData[y][x];
-        if (current == null || current.equals("null"))
-            return;
-
-        // 1. Determine the base item ID
-        String baseItem = current;
-        String rawCurrent = Utils.unformatItemId(current);
-        if (rawCurrent.startsWith("ore:")) {
-            // Try to restore original item if it matches this OreDict
-            String original = originalGridItems[y][x];
-            boolean restored = false;
-            if (original != null && !original.equals("null")) {
-                java.util.List<String> ores = com.bartz24.externaltweaker.app.model.OreDictRegistry
-                        .getInstance().getOreDictsForItem(original);
-                for (String ore : ores) {
-                    if (Utils.formatItemId("ore:" + ore).equals(Utils.formatItemId(current))) {
-                        baseItem = original;
-                        restored = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!restored) {
-                String rep = Utils.getOreDictRepresentativeItem(current);
-                if (rep != null) {
-                    baseItem = rep;
-                }
-            }
-        }
-
-        System.out.println("Cycling item. Current: " + current + ", Base: " + baseItem);
-
-        // 2. Get all OreDicts for the base item
-        java.util.List<String> ores = com.bartz24.externaltweaker.app.model.OreDictRegistry.getInstance()
-                .getOreDictsForItem(baseItem);
-
-        // 3. Create options list: [BaseItem, <ore:Dict1>, <ore:Dict2>, ...]
-        java.util.List<String> options = new java.util.ArrayList<>();
-        options.add(Utils.formatItemId(baseItem));
-        for (String ore : ores) {
-            options.add(Utils.formatItemId("ore:" + ore));
-        }
-
-        if (options.size() <= 1) {
-            System.out.println("No alternatives to cycle.");
-            return;
-        }
-
-        // 4. Find current index and cycle
-        int index = options.indexOf(current);
-        // If current is not in options (maybe it was an OreDict but we switched base
-        // item logic?),
-        // default to 0 (Base Item)
-        if (index == -1) {
-            System.out.println("Current item not in options. Resetting to base.");
-            index = 0;
-        }
-
-        if (next) {
-            index++;
-            if (index >= options.size())
-                index = 0;
-        } else {
-            index--;
-            if (index < 0)
-                index = options.size() - 1;
-        }
-
-        String newItem = options.get(index);
-        System.out.println("Cycled to: " + newItem);
-        // Pass baseItem as icon override to keep the icon constant
-        setGridItem(x, y, newItem, baseItem);
+        InputOreDictSlot slot = gridButtons[y][x];
+        slot.cycleItem(next);
         updateSelectionDisplay();
         saveToRecipe();
     }
 
-    public JButton[][] getGridButtons() {
+    public AbstractSlot[][] getGridButtons() {
         return gridButtons;
     }
 
-    public JButton getOutputButton() {
+    public AbstractSlot getOutputButton() {
         return outputButton;
     }
 
@@ -343,89 +265,24 @@ public class PanelCraftingRecipe extends JPanel {
     }
 
     public void setGridItem(int x, int y, String item) {
-        setGridItem(x, y, item, null);
-    }
-
-    public void setGridItem(int x, int y, String item, String iconOverride) {
-        String formatted = Utils.formatItemId(item);
-        gridData[y][x] = formatted;
-
-        if (item != null && !item.equals("null") && !Utils.unformatItemId(item).startsWith("ore:")) {
-            originalGridItems[y][x] = formatted;
-        }
-
-        updateButtonDisplay(gridButtons[y][x], item, 64, iconOverride);
+        gridButtons[y][x].setContent(item);
     }
 
     public String getGridItem(int x, int y) {
-        return gridData[y][x];
+        return gridButtons[y][x].getContent();
     }
 
     public void setOutputItem(String item) {
-        outputData = Utils.formatItemId(item);
-        updateButtonDisplay(outputButton, item, 80, null);
+        outputButton.setContent(item);
     }
 
     public String getOutputItem() {
-        return outputData;
-    }
-
-    private void updateButtonDisplay(JButton btn, String item, int iconSize) {
-        updateButtonDisplay(btn, item, iconSize, null);
-    }
-
-    private void updateButtonDisplay(JButton btn, String item, int iconSize, String iconOverride) {
-        if (item == null || item.equals("null") || item.isEmpty()) {
-            btn.setText("");
-            btn.setIcon(null);
-            btn.setToolTipText(null);
-            return;
-        }
-
-        String name = Utils.getNameFromId(item);
-        System.out.println("updateButtonDisplay: item=" + item + ", name=" + name);
-        if (name == null || name.isEmpty()) {
-            name = item;
-            if (item.contains(":")) {
-                String[] parts = item.split(":");
-                if (parts.length > 1)
-                    name = parts[1];
-            }
-        }
-
-        btn.setText(name);
-        btn.setToolTipText(item);
-
-        if (mainFrame.iconLoader != null) {
-            String iconItem = item;
-            if (iconOverride != null) {
-                iconItem = iconOverride;
-            } else if (Utils.unformatItemId(item).startsWith("ore:")) {
-                String rep = Utils.getOreDictRepresentativeItem(item);
-                if (rep != null)
-                    iconItem = rep;
-            }
-            System.out.println("updateButtonDisplay: item=" + item + ", iconOverride=" + iconOverride
-                    + ", finalIconItem=" + iconItem);
-
-            // Use the name of the iconItem for lookup, not the display name of the button
-            // (which might be the OreDict name)
-            String iconName = name;
-            if (!iconItem.equals(item)) {
-                String resolvedName = Utils.getNameFromId(iconItem);
-                if (resolvedName != null && !resolvedName.isEmpty()) {
-                    iconName = resolvedName;
-                }
-            }
-
-            ImageIcon icon = mainFrame.iconLoader.loadIcon(iconItem, iconName, iconSize);
-            btn.setIcon(icon);
-        }
+        return outputButton.getContent();
     }
 
     private void updateSelectionDisplay() {
         if (selectedX != -1 && selectedY != -1) {
-            String item = gridData[selectedY][selectedX];
+            String item = getGridItem(selectedX, selectedY);
             lblSelectedItem.setText(item == null || item.equals("null") ? "None" : item);
             btnPrevItem.setEnabled(item != null && !item.equals("null"));
             btnNextItem.setEnabled(item != null && !item.equals("null"));

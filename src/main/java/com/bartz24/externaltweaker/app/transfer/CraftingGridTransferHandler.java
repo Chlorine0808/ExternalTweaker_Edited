@@ -11,6 +11,7 @@ import javax.swing.TransferHandler;
 import com.bartz24.externaltweaker.app.Utils;
 import com.bartz24.externaltweaker.app.model.OreDictRegistry;
 import com.bartz24.externaltweaker.app.panels.PanelCraftingRecipe;
+import com.bartz24.externaltweaker.app.ui.slots.AbstractSlot;
 
 public class CraftingGridTransferHandler extends TransferHandler {
     private PanelCraftingRecipe panel;
@@ -45,24 +46,62 @@ public class CraftingGridTransferHandler extends TransferHandler {
 
             String data = Utils.formatItemId((String) t.getTransferData(DataFlavor.stringFlavor));
 
+            if (!(btn instanceof AbstractSlot)) {
+                return false;
+            }
+
+            AbstractSlot slot = (AbstractSlot) btn;
+
+            // Check if item is valid for this slot
+            if (!slot.isItemValid(data)) {
+                return false;
+            }
+
             if (btn == panel.getOutputButton()) {
-                String rawData = Utils.unformatItemId(data);
-                if (rawData.startsWith("ore:")) {
-                    String rep = Utils.getOreDictRepresentativeItem(rawData);
-                    if (rep != null) {
-                        data = rep;
+                // Output slot logic
+                // If it's an OreDict, we might need to resolve it to a representative item if
+                // the slot doesn't support OreDict
+                // But OutputItemStackSlot doesn't support OreDict, so isItemValid should handle
+                // it.
+                // However, if the user drags an OreDict here, we might want to try to resolve
+                // it?
+                // The previous logic did:
+                /*
+                 * String rawData = Utils.unformatItemId(data);
+                 * if (rawData.startsWith("ore:")) {
+                 * String rep = Utils.getOreDictRepresentativeItem(rawData);
+                 * if (rep != null) {
+                 * data = rep;
+                 * }
+                 * }
+                 */
+                // Let's keep this convenience for output if it's not valid as is
+                if (!slot.isItemValid(data)) {
+                    String rawData = Utils.unformatItemId(data);
+                    if (rawData.startsWith("ore:")) {
+                        String rep = Utils.getOreDictRepresentativeItem(rawData);
+                        if (rep != null && slot.isItemValid(rep)) {
+                            data = rep;
+                        }
                     }
                 }
-                panel.setOutputItem(data);
+
+                if (slot.isItemValid(data)) {
+                    panel.setOutputItem(data);
+                } else {
+                    return false;
+                }
             } else {
+                // Grid slot logic
                 // Find which grid button this is
-                JButton[][] gridButtons = panel.getGridButtons();
+                AbstractSlot[][] gridButtons = panel.getGridButtons();
                 for (int y = 0; y < 3; y++) {
                     for (int x = 0; x < 3; x++) {
                         if (gridButtons[y][x] == btn) {
                             // Check for swap
-                            if (draggedButton != null && draggedButton != btn) {
-                                JButton sourceBtn = draggedButton;
+                            if (draggedButton != null && draggedButton != btn
+                                    && draggedButton instanceof AbstractSlot) {
+                                AbstractSlot sourceBtn = (AbstractSlot) draggedButton;
                                 // Find source coordinates
                                 int sourceX = -1;
                                 int sourceY = -1;
@@ -79,20 +118,33 @@ public class CraftingGridTransferHandler extends TransferHandler {
                                 if (sourceX != -1) {
                                     // Perform swap
                                     String currentTargetItem = panel.getGridItem(x, y);
-                                    panel.setGridItem(sourceX, sourceY, currentTargetItem);
-                                    // Reset draggedButton to indicate swap was handled
-                                    draggedButton = null;
+                                    // Check if swap is valid
+                                    if (sourceBtn.isItemValid(currentTargetItem) && slot.isItemValid(data)) {
+                                        panel.setGridItem(sourceX, sourceY, currentTargetItem);
+                                        // Reset draggedButton to indicate swap was handled
+                                        draggedButton = null;
+                                    } else {
+                                        // Swap not valid
+                                        return false;
+                                    }
                                 }
                             }
 
+                            // OreDict conversion logic if enabled
                             if (panel.isUseOreDict()) {
-                                System.out.println("Checking OreDict for: " + data);
-                                List<String> ores = OreDictRegistry.getInstance().getOreDictsForItem(data);
-                                if (!ores.isEmpty()) {
-                                    data = Utils.formatItemId("ore:" + ores.get(0));
-                                    System.out.println("Converted to OreDict: " + data);
+                                // Only convert if the slot accepts OreDict (which InputOreDictSlot does)
+                                // And if it's not already an OreDict
+                                if (!Utils.unformatItemId(data).startsWith("ore:")) {
+                                    List<String> ores = OreDictRegistry.getInstance().getOreDictsForItem(data);
+                                    if (!ores.isEmpty()) {
+                                        String oreData = Utils.formatItemId("ore:" + ores.get(0));
+                                        if (slot.isItemValid(oreData)) {
+                                            data = oreData;
+                                        }
+                                    }
                                 }
                             }
+
                             panel.setGridItem(x, y, data);
                             panel.setSelectedSlot(x, y);
                             panel.saveToRecipe();
@@ -121,7 +173,7 @@ public class CraftingGridTransferHandler extends TransferHandler {
         if (btn == panel.getOutputButton()) {
             data = panel.getOutputItem();
         } else {
-            JButton[][] gridButtons = panel.getGridButtons();
+            AbstractSlot[][] gridButtons = panel.getGridButtons();
             for (int y = 0; y < 3; y++) {
                 for (int x = 0; x < 3; x++) {
                     if (gridButtons[y][x] == btn) {
@@ -146,7 +198,7 @@ public class CraftingGridTransferHandler extends TransferHandler {
                 if (btn == panel.getOutputButton()) {
                     panel.setOutputItem("null");
                 } else {
-                    JButton[][] gridButtons = panel.getGridButtons();
+                    AbstractSlot[][] gridButtons = panel.getGridButtons();
                     for (int y = 0; y < 3; y++) {
                         for (int x = 0; x < 3; x++) {
                             if (gridButtons[y][x] == btn) {
@@ -158,7 +210,7 @@ public class CraftingGridTransferHandler extends TransferHandler {
                 }
             }
             panel.saveToRecipe();
-            draggedButton = null; // Cleanup
+            draggedButton = null;
         }
     }
 }

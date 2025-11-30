@@ -61,6 +61,14 @@ public class OreDictRegistry {
         return new ArrayList<>(oreDictMap.values());
     }
 
+    public List<String> getItemsForOreDict(String oreName) {
+        OreDictData data = oreDictMap.get(oreName);
+        if (data != null) {
+            return data.getItems();
+        }
+        return Collections.emptyList();
+    }
+
     public void loadFromLegacyArray(Object[][] data) {
         // Only loads display info, cannot reconstruct item lists
         if (data == null)
